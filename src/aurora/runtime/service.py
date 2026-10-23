@@ -25,6 +25,7 @@ from aurora.errors import RetomadaIncompleta
 from aurora.errors import SessaoInexistente
 from aurora.runtime.app import build_app
 from aurora.runtime.confirmacoes import ConfirmationCoordinator
+from aurora.runtime.confirmacoes import registrar_executor_visitante
 from aurora.runtime.confirmacoes import retomada_persistida
 from aurora.runtime.events import coletar_resposta
 from aurora.runtime.runner import AuroraRunner
@@ -68,6 +69,7 @@ def registrar_acoes() -> None:
         validar=validar_parametros_reserva,
         executar=executar_reserva_paga,
     )
+    registrar_executor_visitante()
 
 
 registrar_acoes()
@@ -198,7 +200,13 @@ class AuroraRuntime:
         return recebidos
 
     async def _retomar(self, decisao: DecisaoRegistrada) -> list[Event]:
+        """Retoma o Runner. Efeito e eventos já gravados concluem o despacho.
+
+        Uma falha do modelo depois da tool não desfaz a reserva nem a visita
+        e não deixa o despacho aberto se a resposta da tool já está nos eventos.
+        """
         recebidos: list[Event] = []
+        falha: Exception | None = None
         deadline = asyncio.timeout(RUN_TIMEOUT_SECONDS)
         try:
             async with deadline:
@@ -208,10 +216,10 @@ class AuroraRuntime:
             registrar_falha(decisao.proposta_id, "ExecucaoExpirada")
             if not deadline.expired():
                 raise
-            raise ExecucaoExpirada from None
+            falha = ExecucaoExpirada()
         except Exception as exc:
             registrar_falha(decisao.proposta_id, type(exc).__name__)
-            raise
+            falha = exc
         persistidos = await self._exigir_adk(decisao.session_id)
         if self.coordinator.autores_divergentes(recebidos, decisao.author):
             registrar_falha(decisao.proposta_id, "author_divergente")
@@ -220,6 +228,10 @@ class AuroraRuntime:
         ):
             marcar_concluido(decisao.proposta_id)
             return recebidos
+        if isinstance(falha, ExecucaoExpirada):
+            raise falha
+        if falha is not None:
+            raise falha
         registrar_falha(decisao.proposta_id, "retomada_incompleta")
         raise RetomadaIncompleta
 

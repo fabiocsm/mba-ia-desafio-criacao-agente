@@ -20,7 +20,7 @@ from aurora.errors import ConfirmacaoConflito
 from aurora.storage.database import get_engine
 from aurora.storage.database import transacao_escrita
 
-Executor = Callable[[Connection, str, dict], dict]
+Executor = Callable[[Connection, str, dict, str, str], dict]
 Validador = Callable[[dict], dict]
 
 
@@ -49,8 +49,9 @@ _ACOES: dict[str, AcaoRegistrada] = {}
 def registrar_executor(acao: str, *, validar: Validador, executar: Executor) -> None:
     """Registra uma ação que pode congelar parâmetros e consumir decisão.
 
-    O executor recebe a conexão já aberta e não pode fazer commit próprio.
-    A spec 003 registra autorizar_visitante neste mesmo mapa.
+    O executor recebe a conexão já aberta, o apartamento canônico, o snapshot,
+    a proposta e a sessão. Não pode fazer commit nem abrir outra transação.
+    Somente ações deste mapa são executadas. autorizar_visitante entra aqui.
     """
     _ACOES[acao] = AcaoRegistrada(validar=validar, executar=executar)
 
@@ -474,7 +475,13 @@ def consumir(
             if registrada is None:
                 raise RuntimeError("Ação sem executor no consumo.")
             parametros = json.loads(linha["parametros_json"])
-            resultado = registrada.executar(connection, apartamento, parametros)
+            resultado = registrada.executar(
+                connection,
+                apartamento,
+                parametros,
+                proposta_id,
+                session_id,
+            )
             if resultado.get("resultado") not in {"reservada", "indisponivel", "autorizada", "negada"}:
                 raise RuntimeError("Executor devolveu resultado fora do contrato.")
         connection.execute(

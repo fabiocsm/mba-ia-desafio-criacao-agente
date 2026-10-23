@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr, model_validator
 
 
 class CriarSessaoRequest(BaseModel):
@@ -31,6 +31,19 @@ class ConfirmacaoPendente(BaseModel):
     id: str
     acao: str
     detalhes: dict[str, Any]
+
+    @model_validator(mode="after")
+    def _visitante_publico(self) -> ConfirmacaoPendente:
+        """Pendência de acesso expõe só nome e data, sem metadados internos."""
+        if self.acao != "autorizar_visitante":
+            return self
+        nome = self.detalhes.get("nome")
+        data = self.detalhes.get("data")
+        if set(self.detalhes) != {"nome", "data"}:
+            raise ValueError("Pendência de visitante com campos internos.")
+        if not isinstance(nome, str) or not nome or not isinstance(data, str) or not data:
+            raise ValueError("Pendência de visitante incompleta.")
+        return self
 
 
 class MensagemResponse(BaseModel):

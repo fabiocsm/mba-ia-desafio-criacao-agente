@@ -1,9 +1,11 @@
-# Operação da API — sessões, reservas e confirmação
+# Operação da API — sessões, reservas, visitantes e confirmação
 
-Este manual cobre a base da spec 001 e as reservas com confirmação da spec 002.
-O README do enunciado permanece na raiz. A restauração explícita de reservas e
-visitantes, e o manual final de entrega, ficam para a spec 005. Subir a API não
-restaura dados nem apaga sessões. Não há serviço auxiliar além deste processo.
+Este manual cobre a base da spec 001, as reservas com confirmação da spec 002
+e a autorização de visitantes da spec 003. O README do enunciado permanece na
+raiz. A restauração explícita de reservas e visitantes, e o manual final de
+entrega, ficam para a spec 005. Subir a API não restaura dados nem apaga
+sessões, visitas, decisões ou eventos. Não há serviço auxiliar além deste
+processo.
 
 ## Pré-requisitos
 
@@ -70,9 +72,10 @@ No primeiro uso de um diretório de dados ainda sem a marca de inicialização, 
 API cria `aurora.sqlite3` e `adk.sqlite3` e importa, numa única transação, os
 cadastros de `dados/`. Os arquivos de `dados/` não são alterados. Um diretório
 já inicializado é reaberto como está: reiniciar não reaplica o seed nem desfaz
-reservas, cancelamentos, visitantes, sessões, pendências ou eventos. O startup
-também não chama o modelo e não acrescenta eventos. Ele só publica uma proposta
-cujo evento de confirmação já estava gravado e ainda não tinha sido correlacionado.
+reservas, cancelamentos, visitantes, autorizações, sessões, pendências,
+decisões ou eventos. O startup também não chama o modelo e não acrescenta
+eventos. Ele só publica uma proposta cujo evento de confirmação já estava
+gravado e ainda não tinha sido correlacionado. Não restaura visitantes.
 
 Para repetir uma carga inicial sem apagar um diretório já usado, aponte
 `AURORA_DATA_DIR` para uma pasta vazia e suba de novo.
@@ -86,10 +89,10 @@ Para repetir uma carga inicial sem apagar um diretório já usado, aponte
 - `GET /apartamentos/{apartamento}/reservas`
 - `GET /apartamentos/{apartamento}/visitantes`
 
-A quadra, de taxa zero, é reservada na hora. Salão e churrasqueira ficam
-pendentes até `POST /sessoes/{session_id}/confirmacoes` com `id` e
-`confirmado` booleano. Cancelamento de reserva própria não pede confirmação.
-Autorização de visitante e consulta ao regulamento ainda não estão disponíveis.
+A quadra, de taxa zero, é reservada na hora. Salão, churrasqueira e autorização
+de visitante ficam pendentes até `POST /sessoes/{session_id}/confirmacoes` com
+`id` e `confirmado` booleano. Cancelamento de reserva própria não pede
+confirmação. Consulta ao regulamento ainda não está disponível.
 
 ## Confirmação e recuperação
 
@@ -107,25 +110,29 @@ evento é do principal, `src/aurora/runtime/runner.py` devolve o especialista
 que pediu a confirmação, só nessa retomada. O mecanismo e o limite oficial do
 `DatabaseSessionService` estão em `docs/arquitetura.md`.
 
-Para repetir o roteiro da spec 002 sem mexer em `var/` já usado, suba com outro
-diretório:
+Para repetir o roteiro sem mexer em `var/` já usado, suba com outro diretório:
 
 ```bash
-AURORA_DATA_DIR=var/validacao-002 uv run aurora serve
+AURORA_DATA_DIR=var/validacao-003 uv run aurora serve
 ```
 
 Pare com Ctrl+C e suba de novo o mesmo comando, no mesmo diretório, sem
-restaurar. Não existe comando de restauração nesta entrega; a spec 005 vai
-preservar o ledger e o contador de códigos mesmo ao recriar os dados iniciais.
+restaurar. A pendência de visitante ou de reserva sobrevive, e a aprovação
+depois do reinício grava o efeito uma vez. Reenviar a mesma decisão responde
+`409`. Não existe comando de restauração nesta entrega. A spec 005 deve apagar
+as autorizações antes das propostas, invalidar sessões e pendências, reimportar
+os visitantes iniciais e preservar o ledger e o contador de códigos.
 
 ## Limite observado nesta validação
 
-Em 2026-10-23, a chave usada no desenvolvimento respondeu `429` com o limite
-do free tier: 15 requisições por minuto para `gemini-3.5-flash-lite`. TPM e
-RPD não vieram nessa resposta, e a página de limites do AI Studio pediu login.
+Em 2026-10-23, `uv run python scripts/check_model.py` respondeu
+`modelo=gemini-3.5-flash-lite` e `chamada_de_funcao=sim`, sem imprimir a chave.
+No mesmo dia, a API respondeu `429` com o limite do free tier: 15 requisições
+por minuto para `gemini-3.5-flash-lite`. TPM e RPD não vieram nessa resposta.
 Uma mensagem com transferência entre agentes gasta várias chamadas. Com esse
 teto, vale espaçar as mensagens ou ampliar a quota do projeto. O número não
-vale para outra chave.
+vale para outra chave. Se a cota estoura depois que a tool já gravou o efeito
+e o evento de retorno, a confirmação conclui com `200` e não repete a gravação.
 
 ## Parar
 

@@ -187,12 +187,17 @@ def executar_reserva_paga(
     connection: Connection,
     apartamento: str,
     parametros: dict,
+    proposta_id: str,
+    session_id: str,
 ) -> dict[str, str]:
     """Insere a reserva com os parâmetros já congelados. Não faz commit.
 
     A violação do índice de área/data desfaz só o savepoint da emissão.
-    Outros erros sobem sem serem tratados como ocupação.
+    Outros erros sobem sem serem tratados como ocupação. proposta_id e
+    session_id são a correlação canônica do consumo; a reserva não os grava.
     """
+    if not proposta_id or not session_id or not apartamento:
+        raise RuntimeError("Proposta ausente no consumo.")
     area = str(parametros["area"])
     data = str(parametros["data"])
     connection.exec_driver_sql("SAVEPOINT reserva_paga")

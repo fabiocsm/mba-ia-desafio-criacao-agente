@@ -20,8 +20,12 @@ from sqlalchemy.engine import Connection, Engine
 # C05/C202: cancelada é booleano não nulo com default false; cancelar preserva
 # a linha e o codigo; cancelada_em é nulo enquanto ativa e preenchido ao
 # cancelar. codigo nunca é reutilizado.
-# C06: apartamento, nome e data são obrigatórios; data usa AAAA-MM-DD e é uma
-# data civil válida.
+# C06/C301: id é obrigatório, único e gerado pelo sistema; apartamento, nome
+# e data são obrigatórios; nome não pode ser vazio; data usa AAAA-MM-DD e é
+# uma data civil válida.
+# C302: proposta_id é nulo para dados iniciais e obrigatório para novas
+# autorizações; proposta_id não nulo é único e referencia proposta da mesma
+# sessão e ação autorizar_visitante. Não há UNIQUE de nome/data.
 # C203: há no máximo uma reserva ativa por area e data, imposta por índice
 # único parcial WHERE cancelada=0.
 # C205: codigo do ledger é obrigatório e único; códigos iniciais, cancelados
@@ -61,17 +65,6 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
         ),
         cancelada INTEGER NOT NULL DEFAULT 0 CHECK (cancelada IN (0, 1)),
         cancelada_em TEXT
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS visitante (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        apartamento TEXT NOT NULL REFERENCES apartamento (numero),
-        nome TEXT NOT NULL,
-        data TEXT NOT NULL CHECK (
-            data GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
-            AND date(data) = data
-        )
     )
     """,
     """
@@ -120,6 +113,18 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
             (consumida_em IS NULL AND resultado_json IS NULL)
             OR (consumida_em IS NOT NULL AND resultado_json IS NOT NULL)
         )
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS visitante (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apartamento TEXT NOT NULL REFERENCES apartamento (numero),
+        nome TEXT NOT NULL CHECK (length(trim(nome)) > 0),
+        data TEXT NOT NULL CHECK (
+            data GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+            AND date(data) = data
+        ),
+        proposta_id TEXT UNIQUE REFERENCES proposta_confirmacao (id)
     )
     """,
     """
@@ -214,6 +219,110 @@ def _colunas(connection: Connection, tabela: str) -> set[str]:
     return {linha[1] for linha in linhas}
 
 
+def _sql_tabela(connection: Connection, tabela: str) -> str:
+    sql = connection.execute(
+        text("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = :nome"),
+        {"nome": tabela},
+    ).scalar()
+    return sql or ""
+
+
+def _visitante_atual(connection: Connection) -> bool:
+    """C301/C302 já estão no DDL: nome não vazio, proposta única e FK."""
+    if "proposta_id" not in _colunas(connection, "visitante"):
+        return False
+    sql = _sql_tabela(connection, "visitante")
+    return "trim(nome)" in sql and "proposta_confirmacao" in sql
+
+
+def _migrar_visitante(connection: Connection) -> None:
+    """Reconstrói visitante antigo sem apagar linhas nem dados/."""
+    if _visitante_atual(connection):
+        _garantir_gatilhos_visitante(connection)
+        return
+    tem_proposta = "proposta_id" in _colunas(connection, "visitante")
+    connection.execute(text("DROP TRIGGER IF EXISTS visitante_nova_exige_proposta"))
+    connection.execute(text("DROP TRIGGER IF EXISTS visitante_imutavel"))
+    connection.execute(text("ALTER TABLE visitante RENAME TO visitante_antiga"))
+    connection.execute(
+        text(
+            """
+            CREATE TABLE visitante (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                apartamento TEXT NOT NULL REFERENCES apartamento (numero),
+                nome TEXT NOT NULL CHECK (length(trim(nome)) > 0),
+                data TEXT NOT NULL CHECK (
+                    data GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                    AND date(data) = data
+                ),
+                proposta_id TEXT UNIQUE REFERENCES proposta_confirmacao (id)
+            )
+            """
+        )
+    )
+    if tem_proposta:
+        connection.execute(
+            text(
+                """
+                INSERT INTO visitante (id, apartamento, nome, data, proposta_id)
+                SELECT id, apartamento, nome, data, proposta_id
+                FROM visitante_antiga
+                """
+            )
+        )
+    else:
+        connection.execute(
+            text(
+                """
+                INSERT INTO visitante (id, apartamento, nome, data, proposta_id)
+                SELECT id, apartamento, nome, data, NULL
+                FROM visitante_antiga
+                """
+            )
+        )
+    connection.execute(text("DROP TABLE visitante_antiga"))
+    max_id = connection.execute(
+        text("SELECT COALESCE(MAX(id), 0) FROM visitante")
+    ).scalar_one()
+    connection.execute(text("DELETE FROM sqlite_sequence WHERE name = 'visitante'"))
+    if max_id:
+        connection.execute(
+            text("INSERT INTO sqlite_sequence (name, seq) VALUES ('visitante', :seq)"),
+            {"seq": max_id},
+        )
+    _garantir_gatilhos_visitante(connection)
+
+
+def _garantir_gatilhos_visitante(connection: Connection) -> None:
+    """Nova autorização exige proposta depois do seed. A linha não se reescreve."""
+    connection.execute(
+        text(
+            """
+            CREATE TRIGGER IF NOT EXISTS visitante_nova_exige_proposta
+            BEFORE INSERT ON visitante
+            WHEN NEW.proposta_id IS NULL
+              AND EXISTS (
+                SELECT 1 FROM metadado WHERE chave = 'inicializado'
+              )
+            BEGIN
+                SELECT RAISE(ABORT, 'nova autorizacao exige proposta');
+            END
+            """
+        )
+    )
+    connection.execute(
+        text(
+            """
+            CREATE TRIGGER IF NOT EXISTS visitante_imutavel
+            BEFORE UPDATE ON visitante
+            BEGIN
+                SELECT RAISE(ABORT, 'visitante imutavel');
+            END
+            """
+        )
+    )
+
+
 def _migrar(connection: Connection) -> None:
     """Acrescenta colunas e o ledger sem apagar seed, tombstones ou dados/."""
     if "cancelada_em" not in _colunas(connection, "reserva"):
@@ -240,6 +349,7 @@ def _migrar(connection: Connection) -> None:
     from aurora.storage.codigos import registrar_codigos_existentes
 
     registrar_codigos_existentes(connection)
+    _migrar_visitante(connection)
 
 
 def apply_schema(engine: Engine) -> None:

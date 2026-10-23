@@ -1,9 +1,9 @@
-# Arquitetura — sessões, reservas e confirmação
+# Arquitetura — sessões, reservas, visitantes e confirmação
 
 O morador fala com `aurora_principal`. O código, não o texto do modelo, decide
-identidade, cobrança, cancelamento e exclusividade. Esta nota cobre a base da
-spec 001 e as reservas da spec 002. Visitantes continuam só em consulta. O
-regulamento não entra nesta entrega.
+identidade, cobrança, cancelamento, autorização de entrada e exclusividade.
+Esta nota cobre a base da spec 001, as reservas da spec 002 e a autorização de
+visitantes da spec 003. O regulamento não entra nesta entrega.
 
 ## Agentes
 
@@ -15,7 +15,7 @@ tem `sub_agents` `reservas` e `visitantes`. Não há `AgentTool` nem sessão fil
 | --- | --- | --- |
 | `aurora_principal` | Entende o pedido e responde. Não lê o banco nem o regulamento. | É a raiz do `App`. |
 | `reservas` | Lista, reserva e cancela o que é do apartamento da sessão, e informa livre ou ocupada. | O principal transfere para ele. |
-| `visitantes` | Lista nome e data dos visitantes da sessão. Ainda não autoriza. | O principal transfere para ele. |
+| `visitantes` | Lista nome e data e pede autorização de entrada. A gravação só ocorre depois da confirmação do sistema. | O principal transfere para ele. |
 
 A divisão separa agenda de áreas e acesso de pessoas. Cada especialista só
 recebe as próprias tools. Os especialistas usam `disallow_transfer_to_parent=False`
@@ -31,6 +31,16 @@ Tools de reserva, em `src/aurora/tools/reservas.py`:
 
 Nenhuma delas declara apartamento, sessão, taxa ou decisão. A identidade sai
 de `tool_context.session.id` em `src/aurora/tools/context.py`.
+
+Tools de visitante, em `src/aurora/tools/visitantes.py`:
+
+- `listar_meus_visitantes` — nome e data do apartamento canônico, ou lista vazia
+- `autorizar_visitante` — recebe só nome e data; pede confirmação e não grava
+
+A separação existe porque agenda de área e acesso de pessoas têm efeitos
+diferentes: a reserva disputa uma data, a visita acrescenta uma autorização.
+O especialista de visitantes não cancela reserva, e o de reservas não autoriza
+entrada. Os dois usam o mesmo coordenador de confirmação.
 
 ## Execução
 
@@ -93,10 +103,20 @@ O contrato interno está em
 responde `409` e não recupera. Se o processo cair no meio, a próxima
 `POST /sessoes/{session_id}/mensagens` retoma o despacho antes do texto novo.
 
-A spec 003 registra `autorizar_visitante` no mesmo mapa de
-`src/aurora/storage/confirmacoes.py`, com `registrar_executor`. O executor
-recebe a conexão da transação de consumo e não faz commit próprio. A rota, o
-`409` e o despacho continuam os mesmos.
+`autorizar_visitante` está no mesmo mapa, registrado por
+`registrar_executor_visitante` em `src/aurora/runtime/confirmacoes.py`. O
+executor em `src/aurora/storage/visitantes.py` recebe a conexão já aberta, o
+apartamento da sessão, o snapshot, a proposta e a sessão. Ele não abre
+transação, não faz commit e não decide o consentimento. A negação não chama o
+executor. A aprovação insere o visitante com `proposta_id` na mesma transação
+que grava o consumo. O apartamento vem de `session_identity`, não do texto.
+Nome e data executados são os da proposta, não os argumentos da reentrada.
+
+A rota, o `409` e o despacho continuam os mesmos. Uma falha do modelo depois
+que o efeito e o retorno da tool já estão persistidos conclui o despacho e
+responde `200`, em `src/aurora/runtime/service.py`. Não repete a visita nem a
+reserva. Se os eventos ainda não fecharam, o despacho segue `recuperar` e a
+próxima mensagem da sessão retoma antes do texto novo.
 
 ## Limite do ADK 2.2.0
 
@@ -110,17 +130,24 @@ sem reserva.
 `src/aurora/runtime/runner.py` só troca essa escolha quando o `ContextVar` da
 retomada pertence à sessão atual e o autor existe na árvore. Nos outros
 casos chama a implementação do ADK. Duas sessões não compartilham o contexto.
-O processador nativo de confirmação não foi substituído. A evidência está em
-`docs/validacao/002-reservas.md`.
+O processador nativo de confirmação não foi substituído. A evidência das
+reservas está em `docs/validacao/002-reservas.md`. A autorização de visitante
+repetiu o caminho: a retomada saiu de `visitantes`, antes e depois de reiniciar,
+com a visita gravada. A evidência está em `docs/validacao/003-visitantes.md`.
 
 ## Persistência
 
 Dois SQLite no diretório de dados, por default `var/`:
 
-- `aurora.sqlite3` — cadastro, identidade, reservas, ledger, propostas e decisões
+- `aurora.sqlite3` — cadastro, identidade, reservas, visitantes, ledger, propostas e decisões
 - `adk.sqlite3` — sessões e eventos
 
 A carga inicial de `dados/` ocorre uma vez, enquanto não existe a marca
-`inicializado`. Reiniciar não restaura negócio nem apaga sessões. Um banco da
-spec 001 ganha coluna, ledger e índice sem apagar as reservas já gravadas. A
-restauração explícita fica para a spec 005 e deve preservar ledger e contador.
+`inicializado`. Visitantes do seed ficam com `proposta_id` nulo. Autorizações
+novas exigem proposta. Reiniciar não restaura negócio nem apaga sessões,
+visitas, decisões ou eventos. Um banco anterior ganha `proposta_id` e as
+restrições de nome e chave sem apagar as linhas já gravadas. A restauração
+explícita fica para a spec 005: remove autorizações antes das propostas, por
+causa da chave estrangeira, invalida sessões e pendências, reimporta os
+visitantes iniciais com `proposta_id` nulo e preserva ledger e contador. Subir
+a API não faz essa restauração.

@@ -21,12 +21,14 @@ já respondeu, não repita a transferência.
 Repita somente códigos, áreas, datas, nomes e disponibilidade que apareceram
 no resultado da ferramenta desta conversa. Se a lista veio vazia, diga que
 não há registros. Não complete a resposta com outros moradores.
-Se o resultado for aguardando confirmação, diga que a reserva ainda não foi
-feita. Uma frase do morador não confirma cobrança nem autoriza visitante.
+Se o resultado for aguardando confirmação, diga que a reserva ou a entrada
+ainda não foi feita. Uma frase do morador não confirma cobrança nem autoriza
+visitante.
 Se o resultado for recusa ou indisponível, não invente código, apartamento
 ou responsável.
 Não responda dúvidas sobre o regulamento interno.
-Não diga que um visitante foi autorizado.
+Se a ferramenta devolver autorizada, repita somente o nome e a data. Não
+invente visitante nem apartamento.
 """.strip()
 
 
@@ -37,7 +39,7 @@ def build_principal() -> LlmAgent:
         mode="chat",
         description=(
             "Interlocutor do Residencial Aurora. Encaminha reservas, "
-            "cancelamentos e consultas de visitantes."
+            "cancelamentos, consultas e autorização de visitantes."
         ),
         instruction=INSTRUCAO,
         sub_agents=[build_reservas(), build_visitantes()],

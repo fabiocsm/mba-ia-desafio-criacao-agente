@@ -1,8 +1,9 @@
 """Retomada nativa da confirmação no agente que pediu a tool.
 
-A rota não executa a reserva. Ela grava a decisão e devolve ao Runner a
-resposta da função adk_request_confirmation. O ContextVar só existe durante
-essa retomada e é desfeito no finally.
+A rota não executa reserva nem autorização. Ela grava a decisão e devolve ao
+Runner a resposta da função adk_request_confirmation. O ContextVar só existe
+durante essa retomada e é desfeito no finally. O executor corre dentro do
+consumo, na conexão dessa transação, com a proposta e a sessão canônicas.
 """
 
 from __future__ import annotations
@@ -172,3 +173,16 @@ class ConfirmationCoordinator:
                     )
                     return True
         return False
+
+
+def registrar_executor_visitante() -> None:
+    """Registra autorizar_visitante no mapa herdado. Não cria outro coordenador."""
+    from aurora.storage.confirmacoes import registrar_executor
+    from aurora.storage.visitantes import executar_autorizacao
+    from aurora.storage.visitantes import validar_parametros_visitante
+
+    registrar_executor(
+        "autorizar_visitante",
+        validar=validar_parametros_visitante,
+        executar=executar_autorizacao,
+    )
