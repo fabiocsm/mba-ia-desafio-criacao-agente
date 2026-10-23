@@ -1,8 +1,9 @@
-# Operação da API — sessões e consultas
+# Operação da API — sessões, reservas e confirmação
 
-Este manual cobre a base da spec 001. O README do enunciado permanece na raiz.
-A restauração explícita de reservas e visitantes, e o manual final de entrega,
-ficam para a spec 005. Subir a API não restaura dados nem apaga sessões.
+Este manual cobre a base da spec 001 e as reservas com confirmação da spec 002.
+O README do enunciado permanece na raiz. A restauração explícita de reservas e
+visitantes, e o manual final de entrega, ficam para a spec 005. Subir a API não
+restaura dados nem apaga sessões. Não há serviço auxiliar além deste processo.
 
 ## Pré-requisitos
 
@@ -69,7 +70,9 @@ No primeiro uso de um diretório de dados ainda sem a marca de inicialização, 
 API cria `aurora.sqlite3` e `adk.sqlite3` e importa, numa única transação, os
 cadastros de `dados/`. Os arquivos de `dados/` não são alterados. Um diretório
 já inicializado é reaberto como está: reiniciar não reaplica o seed nem desfaz
-reservas, visitantes, sessões ou eventos.
+reservas, cancelamentos, visitantes, sessões, pendências ou eventos. O startup
+também não chama o modelo e não acrescenta eventos. Ele só publica uma proposta
+cujo evento de confirmação já estava gravado e ainda não tinha sido correlacionado.
 
 Para repetir uma carga inicial sem apagar um diretório já usado, aponte
 `AURORA_DATA_DIR` para uma pasta vazia e suba de novo.
@@ -78,12 +81,42 @@ Para repetir uma carga inicial sem apagar um diretório já usado, aponte
 
 - `POST /sessoes`
 - `POST /sessoes/{session_id}/mensagens`
+- `POST /sessoes/{session_id}/confirmacoes`
 - `GET /sessoes/{session_id}/eventos`
 - `GET /apartamentos/{apartamento}/reservas`
 - `GET /apartamentos/{apartamento}/visitantes`
 
-Não há rota de confirmação nesta entrega. Reserva com cobrança, cancelamento,
-autorização de visitante e consulta ao regulamento não estão disponíveis.
+A quadra, de taxa zero, é reservada na hora. Salão e churrasqueira ficam
+pendentes até `POST /sessoes/{session_id}/confirmacoes` com `id` e
+`confirmado` booleano. Cancelamento de reserva própria não pede confirmação.
+Autorização de visitante e consulta ao regulamento ainda não estão disponíveis.
+
+## Confirmação e recuperação
+
+Uma frase no chat não aprova nem nega. A decisão fica no banco de negócio,
+junto com um despacho. A rota então retoma o Runner na invocação original.
+Se o processo cair depois da decisão e antes de concluir a retomada, reenviar
+o mesmo `id` responde `409` e não executa de novo. A retomada ocorre na
+próxima `POST /sessoes/{session_id}/mensagens` da mesma sessão, antes do texto
+novo, reutilizando a decisão já gravada. `GET /sessoes/{session_id}/eventos` só
+lê. Depois de uma confirmação `200`, o despacho está concluído e um reinício
+não cria eventos nem repete o efeito.
+
+O ADK 2.2.0 escolhe o agente antes da mensagem de retomada. Quando o último
+evento é do principal, `src/aurora/runtime/runner.py` devolve o especialista
+que pediu a confirmação, só nessa retomada. O mecanismo e o limite oficial do
+`DatabaseSessionService` estão em `docs/arquitetura.md`.
+
+Para repetir o roteiro da spec 002 sem mexer em `var/` já usado, suba com outro
+diretório:
+
+```bash
+AURORA_DATA_DIR=var/validacao-002 uv run aurora serve
+```
+
+Pare com Ctrl+C e suba de novo o mesmo comando, no mesmo diretório, sem
+restaurar. Não existe comando de restauração nesta entrega; a spec 005 vai
+preservar o ledger e o contador de códigos mesmo ao recriar os dados iniciais.
 
 ## Limite observado nesta validação
 

@@ -11,3 +11,11 @@ class SessaoInexistente(Exception):
 
 class ExecucaoExpirada(Exception):
     """O atendimento excedeu o prazo de execução do runtime."""
+
+
+class ConfirmacaoConflito(Exception):
+    """O ID não está pendente nesta sessão. Não carrega dados de outra sessão."""
+
+
+class RetomadaIncompleta(Exception):
+    """A decisão foi registrada, mas a retomada não gravou o efeito e os eventos."""

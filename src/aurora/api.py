@@ -10,6 +10,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from aurora.api_routes.confirmacoes import router as confirmacoes_router
 from aurora.api_routes.sessoes import router as sessoes_router
 from aurora.api_routes.verificacao import router as verificacao_router
 from aurora.runtime.service import AuroraRuntime
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Residencial Aurora", lifespan=lifespan)
 app.include_router(sessoes_router)
+app.include_router(confirmacoes_router)
 app.include_router(verificacao_router)
 
 

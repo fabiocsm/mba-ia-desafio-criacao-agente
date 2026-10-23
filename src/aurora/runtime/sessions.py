@@ -12,6 +12,7 @@ corre depois, com o lock do SDK, para não haver espera cruzada.
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,8 @@ from sqlalchemy import select
 from typing_extensions import override
 
 _MIN_STEP_SECONDS = 0.001
+
+logger = logging.getLogger(__name__)
 
 
 def adk_database_url(path: Path) -> str:
@@ -109,4 +112,14 @@ class OrderedDatabaseSessionService(DatabaseSessionService):
             async with self._ts_guard:
                 await self._load_floors()
                 event.timestamp = self._allocate(session.id, float(event.timestamp))
-        return await super().append_event(session=session, event=event)
+        gravado = await super().append_event(session=session, event=event)
+        try:
+            from aurora.storage.confirmacoes import publish_from_event
+
+            publish_from_event(gravado, session.id)
+        except Exception as exc:
+            logger.error(
+                "Falha ao correlacionar confirmacao (%s)",
+                type(exc).__name__,
+            )
+        return gravado

@@ -14,6 +14,7 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
+from aurora.storage.codigos import registrar_codigos_existentes
 from aurora.storage.schema import apply_schema
 
 
@@ -112,11 +113,13 @@ def _importar(connection: Connection, dados_dir: Path) -> None:
             },
         )
 
+    registrar_codigos_existentes(connection)
     conferencias = (
         ("SELECT COUNT(*) FROM apartamento", len(apartamentos)),
         ("SELECT COUNT(*) FROM area", len(areas)),
         ("SELECT COUNT(*) FROM reserva", len(reservas)),
         ("SELECT COUNT(*) FROM visitante", len(visitantes)),
+        ("SELECT COUNT(*) FROM ledger_codigo", len(reservas)),
     )
     for consulta, esperado in conferencias:
         obtido = connection.execute(text(consulta)).scalar_one()
