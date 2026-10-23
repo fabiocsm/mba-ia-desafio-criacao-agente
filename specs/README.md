@@ -11,13 +11,13 @@ ficam juntos: separar essas partes deixaria a operação sem uma garantia obriga
 Visitantes reaproveitam o mesmo ciclo de consentimento. Regulamento tem fluxo próprio.
 A última spec valida o conjunto e a reprodução por alguém sem o ambiente do autor.
 
-| Spec | Entrega | Dependências | Artefatos |
-| --- | --- | --- | --- |
-| 001 | Sessões persistentes, identidade, consultas e histórico completo | Nenhuma | [Spec](001-sessoes-isolamento/spec.md) · [Checklist](001-sessoes-isolamento/checklists/requirements.md) |
-| 002 | Reservas, cancelamento, confirmação compartilhada e exclusividade | 001 | [Spec](002-reservas-confirmacoes/spec.md) · [Checklist](002-reservas-confirmacoes/checklists/requirements.md) |
-| 003 | Autorização de visitantes com confirmação | 001, 002 | [Spec](003-autorizar-visitantes/spec.md) · [Checklist](003-autorizar-visitantes/checklists/requirements.md) |
-| 004 | Consulta seletiva ao regulamento | 001 | [Spec](004-consultar-regulamento/spec.md) · [Checklist](004-consultar-regulamento/checklists/requirements.md) |
-| 005 | Execução reproduzível, restauração, README final e validação completa | 001–004 | [Spec](005-entrega-validacao/spec.md) · [Checklist](005-entrega-validacao/checklists/requirements.md) |
+| Spec | Entrega | Dependências | Tarefas | Artefatos |
+| --- | --- | --- | --- | --- |
+| 001 | Sessões persistentes, identidade, consultas e histórico completo | Nenhuma | 30 | [Spec](001-sessoes-isolamento/spec.md) · [Checklist](001-sessoes-isolamento/checklists/requirements.md) · [Plano](001-sessoes-isolamento/plan.md) · [Tarefas](001-sessoes-isolamento/tasks.md) · [Análise](001-sessoes-isolamento/analysis-summary.md) |
+| 002 | Reservas, cancelamento, confirmação compartilhada e exclusividade | 001 | 36 | [Spec](002-reservas-confirmacoes/spec.md) · [Checklist](002-reservas-confirmacoes/checklists/requirements.md) · [Plano](002-reservas-confirmacoes/plan.md) · [Tarefas](002-reservas-confirmacoes/tasks.md) · [Análise](002-reservas-confirmacoes/analysis-summary.md) |
+| 003 | Autorização de visitantes com confirmação | 001, 002 | 26 | [Spec](003-autorizar-visitantes/spec.md) · [Checklist](003-autorizar-visitantes/checklists/requirements.md) · [Plano](003-autorizar-visitantes/plan.md) · [Tarefas](003-autorizar-visitantes/tasks.md) · [Análise](003-autorizar-visitantes/analysis-summary.md) |
+| 004 | Consulta seletiva ao regulamento | 001 | 21 | [Spec](004-consultar-regulamento/spec.md) · [Checklist](004-consultar-regulamento/checklists/requirements.md) · [Plano](004-consultar-regulamento/plan.md) · [Tarefas](004-consultar-regulamento/tasks.md) · [Análise](004-consultar-regulamento/analysis-summary.md) |
+| 005 | Execução reproduzível, restauração, README final e validação completa | 001–004 | 29 | [Spec](005-entrega-validacao/spec.md) · [Checklist](005-entrega-validacao/checklists/requirements.md) · [Plano](005-entrega-validacao/plan.md) · [Tarefas](005-entrega-validacao/tasks.md) · [Análise](005-entrega-validacao/analysis-summary.md) |
 
 Ordem sugerida: **001 → 002 → 003 → 004 → 005**. A 004 também pode ser planejada após a 001.
 Isso descreve dependências do produto, sem solicitar execução por agentes em paralelo.
@@ -150,11 +150,25 @@ ID, apartamento inexistente e nova mensagem durante pendência mantêm a liberda
 enunciado, preservadas as garantias; reenvio sequencial continua obrigatoriamente protegido.
 O avaliador pode reformular as mensagens e esclarecer informações para completar os fluxos.
 
-As specs estão prontas para `$speckit-plan`; não há perguntas críticas em aberto. Os checklists
-atestam **qualidade da especificação**, não implementação ou aprovação no fluxo do avaliador.
-Não há decisões antecipadas sobre framework web, banco, modelo Gemini específico ou mecanismo
-interno de busca, concorrência ou persistência.
+O setup foi concluído em 2026-10-23 por cinco subagentes em sequência: cada um executou
+`$speckit-plan` → `$speckit-tasks` → `$speckit-analyze`, aplicou as correções autorizadas em
+etapa separada e repetiu a análise. Cada diretório contém plano, pesquisa, modelo de dados,
+contratos, guia de validação, tarefas e resumo da análise final. As cinco análises encerraram
+sem achados residuais, com **142 tarefas** e cobertura documental dos **83 requisitos FR/SC**.
+
+Os planos definem FastAPI, Google ADK `2.2.0`, dois SQLite locais, identidade canônica
+imutável, confirmação compartilhada com consumo transacional e recuperação seletiva do
+regulamento. Detalhes e fontes estão nos respectivos planos e pesquisas; as specs continuam
+definindo os requisitos, sem substituir as garantias por decisões de arquitetura.
+
+As cinco specs estão prontas para implementação, respeitando suas dependências. Todas as
+tarefas permanecem desmarcadas. Checklists e análises atestam **qualidade e coerência dos
+artefatos**, não funcionamento da aplicação. Acesso e quotas ativos do Gemini, confirmação
+ADK com SQLite e aprovação após reinício, demais fluxos de runtime, os 15 passos completos,
+os 28 critérios e publicação do fork em `main` ainda exigem execução e evidências reais.
+O README do enunciado permanece preservado; sua substituição é tarefa futura da 005.
 
 O seletor `.specify/feature.json` aponta para **001-sessoes-isolamento**, primeira da sequência.
-Para planejar outra spec, indicar explicitamente seu diretório como `SPECIFY_FEATURE_DIRECTORY`
-ou atualizar o seletor para o respectivo diretório. Nomes de diretório não criam branches.
+Para trabalhar em outra spec, indicar explicitamente seu diretório absoluto como
+`SPECIFY_FEATURE_DIRECTORY` e usar `SPECIFY_FEATURE_NO_PERSIST=1` para preservar o seletor,
+ou atualizar o seletor intencionalmente. Nomes de diretório não criam branches.
