@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import aclosing
 
 from google.adk.agents.run_config import RunConfig
 from google.adk.agents.run_config import StreamingMode
@@ -14,6 +15,7 @@ from aurora.config import APP_NAME
 from aurora.config import export_api_key
 from aurora.config import get_settings
 from aurora.errors import ApartamentoInexistente
+from aurora.errors import ExecucaoExpirada
 from aurora.errors import SessaoInexistente
 from aurora.runtime.app import build_app
 from aurora.runtime.events import coletar_resposta
@@ -29,6 +31,8 @@ from aurora.storage.identity import obter_identidade
 from aurora.storage.seed import initialize_storage
 
 logger = logging.getLogger(__name__)
+
+RUN_TIMEOUT_SECONDS = 120
 
 _RUN_CONFIG = RunConfig(
     streaming_mode=StreamingMode.NONE,
@@ -103,16 +107,26 @@ class AuroraRuntime:
         async with await self._lock(session_id):
             await self._exigir_adk(session_id)
             recebidos = []
-            async for evento in self.runner.run_async(
-                user_id=session_id,
-                session_id=session_id,
-                new_message=types.Content(
-                    role="user",
-                    parts=[types.Part(text=texto)],
-                ),
-                run_config=_RUN_CONFIG,
-            ):
-                recebidos.append(evento)
+            deadline = asyncio.timeout(RUN_TIMEOUT_SECONDS)
+            try:
+                async with deadline:
+                    async with aclosing(
+                        self.runner.run_async(
+                            user_id=session_id,
+                            session_id=session_id,
+                            new_message=types.Content(
+                                role="user",
+                                parts=[types.Part(text=texto)],
+                            ),
+                            run_config=_RUN_CONFIG,
+                        )
+                    ) as eventos:
+                        async for evento in eventos:
+                            recebidos.append(evento)
+            except TimeoutError:
+                if not deadline.expired():
+                    raise
+                raise ExecucaoExpirada from None
             return MensagemResponse(
                 resposta=coletar_resposta(recebidos),
                 confirmacoes_pendentes=[],

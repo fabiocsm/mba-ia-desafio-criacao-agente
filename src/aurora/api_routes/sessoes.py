@@ -8,6 +8,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from aurora.errors import ApartamentoInexistente
+from aurora.errors import ExecucaoExpirada
 from aurora.errors import SessaoInexistente
 from aurora.schemas import CriarSessaoRequest
 from aurora.schemas import CriarSessaoResponse
@@ -43,6 +44,10 @@ async def enviar_mensagem(
         return await _runtime(request).enviar_mensagem(session_id, corpo.texto)
     except SessaoInexistente:
         raise HTTPException(status_code=404, detail="Sessão não encontrada") from None
+    except ExecucaoExpirada:
+        raise HTTPException(
+            status_code=504, detail="Tempo limite de atendimento excedido."
+        ) from None
 
 
 @router.get("/sessoes/{session_id}/eventos")

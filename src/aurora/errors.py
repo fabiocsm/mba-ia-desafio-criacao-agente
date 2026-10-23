@@ -7,3 +7,7 @@ class ApartamentoInexistente(Exception):
 
 class SessaoInexistente(Exception):
     """Não há vínculo canônico utilizável para o identificador."""
+
+
+class ExecucaoExpirada(Exception):
+    """O atendimento excedeu o prazo de execução do runtime."""

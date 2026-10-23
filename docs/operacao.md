@@ -47,6 +47,15 @@ Se o modelo estiver indisponível, troque `GEMINI_MODEL` para uma alternativa
 já conferida no projeto, como `gemini-3.8-flash`, e repita o script. Não há
 troca automática.
 
+O probe limita cada chamada HTTP a 120 segundos. Na API, cada execução do
+Runner tem prazo total de 120 segundos, incluindo as chamadas ao modelo e
+tools. Se esse prazo expirar, a API cancela a execução, libera a sessão para
+novas mensagens e devolve `504` em JSON com
+`{"detail":"Tempo limite de atendimento excedido."}`. Eventos já persistidos
+continuam disponíveis integralmente em `/sessoes/{session_id}/eventos`;
+o prazo não apaga nem desfaz esses registros. Mensagens da mesma sessão são
+serializadas; o prazo de execução começa após a espera pela mensagem anterior.
+
 ## Subida
 
 ```bash

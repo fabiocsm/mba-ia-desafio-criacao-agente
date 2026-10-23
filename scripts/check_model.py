@@ -48,7 +48,10 @@ def main() -> int:
         return 1
     print(f"modelo={settings.gemini_model}")
     try:
-        client = genai.Client(api_key=settings.google_api_key)
+        client = genai.Client(
+            api_key=settings.google_api_key,
+            http_options=types.HttpOptions(timeout=120_000),
+        )
         chat = client.chats.create(
             model=settings.gemini_model,
             config=types.GenerateContentConfig(
