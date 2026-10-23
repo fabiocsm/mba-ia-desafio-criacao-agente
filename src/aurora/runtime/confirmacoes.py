@@ -32,6 +32,7 @@ class RetomadaAutorizada:
     invocation_id: str
     author: str
     proposta_id: str
+    original_function_call_id: str
 
 
 _retomada: ContextVar[RetomadaAutorizada | None] = ContextVar(
@@ -45,13 +46,20 @@ def retomada_atual() -> RetomadaAutorizada | None:
 
 
 def deve_retomar(tool_context) -> bool:
+    """O fallback identifica só a chamada original, não novas tools do Runner."""
     if getattr(tool_context, "tool_confirmation", None) is not None:
         return True
     atual = _retomada.get()
     if atual is None:
         return False
     sessao = getattr(getattr(tool_context, "session", None), "id", None)
-    return bool(getattr(tool_context, "function_call_id", None)) and sessao == atual.session_id
+    return (
+        sessao == atual.session_id
+        and getattr(tool_context, "function_call_id", None)
+        == atual.original_function_call_id
+        and tool_context.invocation_id == atual.invocation_id
+        and tool_context.agent_name == atual.author
+    )
 
 
 def consume_in_tool(tool_context) -> dict:
@@ -62,6 +70,7 @@ def consume_in_tool(tool_context) -> dict:
     if (
         autorizada is None
         or not chamada
+        or chamada != autorizada.original_function_call_id
         or autorizada.session_id != identidade.session_id
         or autorizada.invocation_id != tool_context.invocation_id
         or autorizada.author != tool_context.agent_name
@@ -121,6 +130,7 @@ class ConfirmationCoordinator:
                 invocation_id=decisao.invocation_id,
                 author=decisao.author,
                 proposta_id=decisao.proposta_id,
+                original_function_call_id=decisao.original_function_call_id,
             )
         )
 
