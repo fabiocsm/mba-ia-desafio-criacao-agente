@@ -26,9 +26,8 @@ _consulta: ContextVar[ConsultaScope | None] = ContextVar(
 )
 
 _TECNICO = re.compile(
-    r"\b(?:topics?|topicos?|paths?|caminhos?|tools?|ferramentas?|"
-    r"quer(?:y|ies)|consultas?|capitulos?|chapters?|args|argumentos)"
-    r"\s*[:=]\s*[^\s,;]+",
+    r"\b(?:topics?|t[oó]picos?|paths?|caminhos?|tools?|ferramentas?|"
+    r"quer(?:y|ies)|consultas?|cap[ií]tulos?|chapters?|args|argumentos)\b",
     re.IGNORECASE,
 )
 
@@ -57,84 +56,11 @@ _FRASES_INTEGRAL = (
 
 _VERBOS_CARGA = ("carregue", "carregar", "transcreva", "transcrever")
 
-_GENERICOS = frozenset(
-    {
-        "a",
-        "o",
-        "os",
-        "as",
-        "um",
-        "uma",
-        "de",
-        "do",
-        "da",
-        "dos",
-        "das",
-        "e",
-        "ou",
-        "em",
-        "no",
-        "na",
-        "nos",
-        "nas",
-        "para",
-        "por",
-        "com",
-        "que",
-        "qual",
-        "quais",
-        "como",
-        "onde",
-        "me",
-        "meu",
-        "minha",
-        "meus",
-        "minhas",
-        "se",
-        "ao",
-        "aos",
-        "sobre",
-        "regra",
-        "regras",
-        "norma",
-        "normas",
-        "regulamento",
-        "diz",
-        "fala",
-        "fale",
-        "explique",
-        "duvida",
-        "duvidas",
-        "pode",
-        "posso",
-        "poder",
-        "ha",
-        "tem",
-        "existe",
-        "existem",
-        "quero",
-        "saber",
-        "informe",
-        "informa",
-        "favor",
-        "gentileza",
-        "interno",
-        "interna",
-        "condominio",
-        "residencial",
-        "aurora",
-        "artigo",
-        "capitulo",
-        "ate",
-        "sao",
-        "esta",
-        "esse",
-        "essa",
-        "isso",
-        "meu",
-        "sua",
-        "seu",
-    }
+_EXCLUSAO = re.compile(
+    r"\b(?:nao (?:(?:me )?(?:fale|comente|inclua|mencione|consulte|busque|traga|responda)|"
+    r"quero|preciso|desejo)|"
+    r"sem (?:falar|comentar|comentarios|mencionar|consultar)|evite (?:falar|comentar|mencionar)|"
+    r"ignore|exclua|exceto)\b"
 )
 
 
@@ -153,54 +79,34 @@ def reset_consulta(token: Token) -> None:
 def autorizar_mensagem(texto: str) -> Autorizacao:
     """Decide o conjunto fechado. Não devolve texto da fonte."""
     indice_atual()
-    util = _preparar(texto)
-    if util is None:
-        return Autorizacao("esclarecer", ())
-    norm = normalizar(util)
-    if not norm:
-        return Autorizacao("esclarecer", ())
-
-    assuntos = [
-        assunto
-        for assunto in ASSUNTOS
-        if any(_tem(norm, alias) for alias in assunto.aliases)
-    ]
-    if not assuntos:
-        return Autorizacao("esclarecer", ())
-
     escolhidos: set[str] = set()
-    algum_completo = False
-    algum_parcial = False
     algum_sem_regra = False
-    for assunto in assuntos:
-        intencoes = [item for item in INTENCOES if item.assunto == assunto.id]
-        completas = [item for item in intencoes if _completa(norm, item)]
-        if completas:
-            algum_completo = True
+    algum_incerto = False
+    for norm in _preparar(texto):
+        assuntos = _assuntos_da_clausula(norm)
+        if not assuntos:
+            algum_incerto = True
+        for assunto in assuntos:
+            if any(_tem(norm, ausencia) for ausencia in assunto.ausencias):
+                algum_sem_regra = True
+                continue
+            completas = [
+                item for item in INTENCOES
+                if item.assunto == assunto.id and _completa(norm, item)
+            ]
+            if not completas:
+                algum_incerto = True
             for item in completas:
                 escolhidos.update(item.unidades)
                 for artigo_id in item.artigos:
                     escolhidos.update(expandir_artigo(artigo_id))
-            continue
-        if any(_tem(norm, ausencia) for ausencia in assunto.ausencias):
-            algum_sem_regra = True
-            continue
-        if any(_parcial(norm, item) for item in intencoes):
-            algum_parcial = True
-            continue
-        if _sobra_especifica(norm, assunto):
-            algum_sem_regra = True
-
-    if not algum_completo:
-        if algum_sem_regra and not algum_parcial:
-            return Autorizacao("sem_base", ())
-        return Autorizacao("esclarecer", ())
 
     ordenadas = tuple(
         unidade.id for unidade in indice_atual().unidades if unidade.id in escolhidos
     )
     if not ordenadas:
-        return Autorizacao("sem_base", ())
+        status = "sem_base" if algum_sem_regra and not algum_incerto else "esclarecer"
+        return Autorizacao(status, ())
     return Autorizacao("ok", ordenadas)
 
 
@@ -212,15 +118,58 @@ def normalizar(texto: str) -> str:
     return re.sub(r"\s+", " ", sem_acento).strip()
 
 
-def _preparar(texto: str) -> str | None:
-    sem_tecnico = _TECNICO.sub(" ", texto)
-    frases = [frase.strip() for frase in re.split(r"[.!?\n;]+", sem_tecnico) if frase.strip()]
-    if not frases:
-        return None
-    uteis = [frase for frase in frases if not _eh_controle(normalizar(frase))]
-    if not uteis:
-        return None
-    return " ".join(uteis)
+def _preparar(texto: str) -> list[str]:
+    # Depois de um argumento técnico, todo o restante é não confiável:
+    # valores JSON/listas podem conter pontuação e novas linhas. Não tentar
+    # reinterpretá-los como perguntas. O prefixo independente continua válido.
+    texto = unicodedata.normalize("NFC", texto)
+    tecnico = _TECNICO.search(texto)
+    if tecnico:
+        texto = texto[:tecnico.start()]
+    uteis: list[str] = []
+    for frase in re.split(r"[.!?\n;]+", texto):
+        norm = normalizar(frase)
+        if _eh_controle(norm):
+            continue
+        exclusao = _EXCLUSAO.search(norm)
+        if exclusao:
+            norm = norm[:exclusao.start()].strip()
+        # Intenções não atravessam a conjunção que inicia outro pedido.
+        clausulas: list[str] = []
+        for clausula in re.split(r"\s+e\s+", norm):
+            if not clausula:
+                continue
+            if clausulas and not _assuntos_da_clausula(clausula):
+                # Coordenação do mesmo assunto: "domingo e segunda".
+                clausulas[-1] += " e " + clausula
+            else:
+                clausulas.append(clausula)
+        uteis.extend(clausulas)
+    return uteis
+
+
+def _assuntos_da_clausula(texto: str) -> list[Assunto]:
+    assuntos = [
+        assunto for assunto in ASSUNTOS
+        if any(_tem(texto, alias) for alias in assunto.aliases)
+    ]
+    ids = {assunto.id for assunto in assuntos}
+    # Nestas construções, a área/elevador é complemento da pergunta sobre
+    # o animal ou a mudança; não autoriza as regras gerais daquele local.
+    incidentais: set[str] = set()
+    if "animais" in ids:
+        incidentais.update({
+            "piscina", "academia", "brinquedoteca", "playground", "salao",
+            "churrasqueira", "quadra", "elevador", "garagem",
+        })
+    if "mudanca" in ids:
+        incidentais.update({"elevador", "vedacoes_morador"})
+    if "obra" in ids:
+        incidentais.update({"silencio", "vedacoes_morador"})
+    pertinentes = [assunto for assunto in assuntos if assunto.id not in incidentais]
+    # Sem uma relação conhecida ou cláusulas independentes, não aplicar
+    # a intenção de um tema aos demais apenas por compartilharem palavras.
+    return pertinentes if len(pertinentes) <= 1 else []
 
 
 def _eh_controle(frase: str) -> bool:
@@ -242,26 +191,3 @@ def _tem(texto: str, sinal: str) -> bool:
 
 def _completa(texto: str, intencao: Intencao) -> bool:
     return any(all(_tem(texto, sinal) for sinal in grupo) for grupo in intencao.grupos)
-
-
-def _parcial(texto: str, intencao: Intencao) -> bool:
-    if _completa(texto, intencao):
-        return False
-    for grupo in intencao.grupos:
-        presentes = [_tem(texto, sinal) for sinal in grupo]
-        if any(presentes) and not all(presentes):
-            return True
-    return False
-
-
-def _sobra_especifica(texto: str, assunto: Assunto) -> bool:
-    aliases: set[str] = set()
-    for alias in assunto.aliases:
-        aliases.update(normalizar(alias).split())
-    for token in texto.split():
-        if token in _GENERICOS or token in aliases:
-            continue
-        if token.endswith("s") and token[:-1] in aliases:
-            continue
-        return True
-    return False
