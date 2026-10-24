@@ -53,6 +53,8 @@ from aurora.storage.confirmacoes import sessoes_preparando
 from aurora.storage.database import dispose_engine
 from aurora.storage.database import get_engine
 from aurora.storage.identity import criar_sessao_coordenada
+from aurora.storage.maintenance import LOCK_NAME
+from aurora.storage.maintenance import OperationLock
 from aurora.storage.maintenance import marker_present
 from aurora.storage.identity import obter_identidade
 from aurora.storage.reservas import executar_reserva_paga
@@ -132,39 +134,61 @@ class AuroraRuntime:
         self.session_service = session_service
         self.runner = runner
         self.coordinator = ConfirmationCoordinator(runner)
+        self._operation_lock: OperationLock | None = None
         self._guard = asyncio.Lock()
         self._locks: dict[str, asyncio.Lock] = {}
 
     @classmethod
     async def start(cls) -> AuroraRuntime:
         settings = get_settings()
-        if marker_present(settings.data_dir):
-            raise RuntimeError(
-                "Restauração incompleta. A API não inicia. "
-                "Execute uv run aurora restaurar com o serviço parado."
+        lock = OperationLock(settings.data_dir / LOCK_NAME)
+        lock.acquire_shared()
+        session_service = None
+        try:
+            if marker_present(settings.data_dir):
+                raise RuntimeError(
+                    "Restauração incompleta. A API não inicia. "
+                    "Execute uv run aurora restaurar com o serviço parado."
+                )
+            export_api_key(settings)
+            initialize_storage(get_engine(), settings.dados_dir)
+            registrar_acoes()
+            session_service = OrderedDatabaseSessionService(
+                adk_database_url(settings.adk_db_path)
             )
-        export_api_key(settings)
-        initialize_storage(get_engine(), settings.dados_dir)
-        registrar_acoes()
-        session_service = OrderedDatabaseSessionService(
-            adk_database_url(settings.adk_db_path)
-        )
-        tune_sqlite(session_service)
-        await session_service.prime_timestamps()
-        runner = AuroraRunner(
-            app=build_app(),
-            session_service=session_service,
-            auto_create_session=False,
-        )
-        runtime = cls(session_service, runner)
-        await runtime.reconciliar_metadados()
-        logger.info("Modelo configurado: %s", settings.gemini_model)
-        logger.info("Diretório de dados: %s", settings.data_dir)
-        return runtime
+            tune_sqlite(session_service)
+            await session_service.prime_timestamps()
+            runner = AuroraRunner(
+                app=build_app(),
+                session_service=session_service,
+                auto_create_session=False,
+            )
+            runtime = cls(session_service, runner)
+            runtime._operation_lock = lock
+            await runtime.reconciliar_metadados()
+            logger.info("Modelo configurado: %s", settings.gemini_model)
+            logger.info("Diretório de dados: %s", settings.data_dir)
+            return runtime
+        except BaseException:
+            try:
+                if session_service is not None:
+                    await session_service.close()
+            finally:
+                try:
+                    dispose_engine()
+                finally:
+                    lock.release()
+            raise
 
     async def aclose(self) -> None:
-        await self.session_service.close()
-        dispose_engine()
+        try:
+            await self.session_service.close()
+        finally:
+            try:
+                dispose_engine()
+            finally:
+                if self._operation_lock is not None:
+                    self._operation_lock.release()
 
     async def _lock(self, session_id: str) -> asyncio.Lock:
         async with self._guard:

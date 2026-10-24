@@ -94,6 +94,9 @@ propostas, decisões e despachos, e repõe reservas e visitantes a partir de
 `dados/`, sem editar esses arquivos. Se a restauração parar no meio, o
 marcador `var/reset-in-progress.json` permanece e `aurora serve` recusa
 iniciar até um `aurora restaurar` concluir as duas bases.
+`AuroraRuntime.start` retém o lock compartilhado de `operation.lock` antes de
+verificar o marcador e abrir os bancos, inclusive na inicialização ASGI direta;
+`aclose` o libera depois de fechar as conexões.
 
 ### 4. Consulta seletiva ao regulamento
 

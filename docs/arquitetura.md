@@ -189,6 +189,10 @@ faz a restauração explícita.
 `uv run aurora serve` adquire lock compartilhado em `operation.lock`, no
 diretório de dados, antes de o processo abrir banco. O descritor fica aberto
 até o Uvicorn encerrar. O arquivo de lock não é apagado.
+`AuroraRuntime.start` também mantém um lock compartilhado, inclusive quando
+a aplicação ASGI é iniciada diretamente. Ele precede a verificação do marcador
+e a abertura dos bancos; falha de inicialização ou `aclose` o libera depois
+de fechar as conexões.
 `uv run aurora restaurar` pede o mesmo caminho em lock exclusivo e não
 bloqueante. Se o serviço estiver ativo, o comando sai com erro antes de criar
 o marcador e antes de escrever.

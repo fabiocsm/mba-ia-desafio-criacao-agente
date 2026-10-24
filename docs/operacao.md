@@ -76,8 +76,10 @@ O comando executa Uvicorn em `0.0.0.0:8000` com um worker e sem reload. A API
 responde em `http://localhost:8000`.
 
 O processo pega o lock compartilhado de `operation.lock` antes de abrir
-qualquer banco e o segura até encerrar. Não chama `restaurar`. No primeiro uso
-de um diretório ainda sem a marca de inicialização, cria `aurora.sqlite3` e
+qualquer banco e o segura até encerrar. Não chama `restaurar`. O runtime
+também adquire esse lock, inclusive na inicialização ASGI direta,
+e só o libera depois de fechar os bancos, ou se a inicialização falhar.
+No primeiro uso de um diretório ainda sem a marca de inicialização, cria `aurora.sqlite3` e
 `adk.sqlite3` e importa, numa única transação, os cadastros de `dados/`. Os
 arquivos de `dados/` não são alterados. Um diretório já inicializado é
 reaberto como está: reiniciar não reaplica o seed nem desfaz reservas,
