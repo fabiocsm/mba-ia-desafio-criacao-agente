@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 from contextlib import aclosing
 
 from google.adk.agents.run_config import RunConfig
@@ -23,6 +24,10 @@ from aurora.errors import ConfirmacaoConflito
 from aurora.errors import ExecucaoExpirada
 from aurora.errors import RetomadaIncompleta
 from aurora.errors import SessaoInexistente
+from aurora.regulamento.models import ConsultaScope
+from aurora.regulamento.selection import autorizar_mensagem
+from aurora.regulamento.selection import instalar_consulta
+from aurora.regulamento.selection import reset_consulta
 from aurora.runtime.app import build_app
 from aurora.runtime.confirmacoes import ConfirmationCoordinator
 from aurora.runtime.confirmacoes import registrar_executor_visitante
@@ -57,10 +62,56 @@ logger = logging.getLogger(__name__)
 
 RUN_TIMEOUT_SECONDS = 120
 
+_MENSAGEM_ESCLARECER = (
+    "Para consultar o regulamento, diga o assunto e o que você quer saber. "
+    "Um pedido genérico ou de carga integral não traz trechos."
+)
+_MENSAGEM_SEM_BASE = (
+    "Não há, na consulta ao regulamento, uma regra sobre esse ponto. "
+    "Não vou inventar uma norma."
+)
+_TOOLS_NEGOCIO = frozenset(
+    {
+        "listar_minhas_reservas",
+        "consultar_disponibilidade",
+        "reservar_area",
+        "cancelar_minha_reserva",
+        "listar_meus_visitantes",
+        "autorizar_visitante",
+    }
+)
+
 _RUN_CONFIG = RunConfig(
     streaming_mode=StreamingMode.NONE,
     max_llm_calls=20,
 )
+
+
+def _payload_ferramenta(resposta) -> dict:
+    bruto = getattr(resposta, "response", None)
+    if isinstance(bruto, dict):
+        return bruto
+    return {}
+
+
+def _resposta_regulamento(eventos: list[Event], resposta: str) -> str:
+    """Fallback só da consulta. Não apaga resultado de reserva ou visitante."""
+    statuses: list[str] = []
+    negocio = False
+    for evento in eventos:
+        for chamada in evento.get_function_responses():
+            if chamada.name in _TOOLS_NEGOCIO:
+                negocio = True
+            if chamada.name != "consultar_regulamento":
+                continue
+            status = _payload_ferramenta(chamada).get("status")
+            if status in ("ok", "esclarecer", "sem_base"):
+                statuses.append(status)
+    if negocio or not statuses or "ok" in statuses:
+        return resposta
+    if "sem_base" in statuses:
+        return _MENSAGEM_SEM_BASE
+    return _MENSAGEM_ESCLARECER
 
 
 def registrar_acoes() -> None:
@@ -249,12 +300,29 @@ class AuroraRuntime:
         async with await self._lock(session_id):
             await self._exigir_adk(session_id)
             await self._recuperar_despachos(session_id)
-            recebidos = await self._executar(
-                session_id,
-                types.Content(role="user", parts=[types.Part(text=texto)]),
+            autorizacao = autorizar_mensagem(texto)
+            scope = ConsultaScope(
+                session_id=session_id,
+                execution_nonce=secrets.token_urlsafe(16),
+                unidades=frozenset(autorizacao.unidades),
+                status=autorizacao.status,
             )
+            token = instalar_consulta(scope)
+            try:
+                recebidos = await self._executar(
+                    session_id,
+                    types.Content(role="user", parts=[types.Part(text=texto)]),
+                )
+            finally:
+                reset_consulta(token)
             await self._publicar_eventos(session_id)
-            return self._envelope(session_id, coletar_resposta(recebidos))
+            logger.info(
+                "Consulta ao regulamento: status=%s unidades=%s.",
+                scope.status,
+                len(scope.unidades),
+            )
+            resposta = _resposta_regulamento(recebidos, coletar_resposta(recebidos))
+            return self._envelope(session_id, resposta)
 
     async def confirmar(
         self,
@@ -268,6 +336,7 @@ class AuroraRuntime:
                 decisao = decide(session_id, proposta_id, confirmado)
             except ConfirmacaoConflito:
                 raise
+            # Confirmação não traz pergunta nova e não herda escopo de consulta.
             recebidos = await self._retomar(decisao)
             return self._envelope(session_id, coletar_resposta(recebidos))
 

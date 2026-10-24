@@ -6,6 +6,7 @@ __pycache__/
 dist/
 *.egg-info/
 var/
+var/evidencias/
 .DS_Store
 Thumbs.db
 *.tmp

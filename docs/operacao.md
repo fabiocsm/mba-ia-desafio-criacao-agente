@@ -1,11 +1,12 @@
-# Operação da API — sessões, reservas, visitantes e confirmação
+# Operação da API — sessões, reservas, visitantes, confirmação e regulamento
 
-Este manual cobre a base da spec 001, as reservas com confirmação da spec 002
-e a autorização de visitantes da spec 003. O README do enunciado permanece na
-raiz. A restauração explícita de reservas e visitantes, e o manual final de
-entrega, ficam para a spec 005. Subir a API não restaura dados nem apaga
-sessões, visitas, decisões ou eventos. Não há serviço auxiliar além deste
-processo.
+Este manual cobre a base da spec 001, as reservas com confirmação da spec 002,
+a autorização de visitantes da spec 003 e a consulta ao regulamento da spec
+004. O README do enunciado permanece na raiz. A restauração explícita de
+reservas e visitantes, e o manual final de entrega, ficam para a spec 005.
+Subir a API não restaura dados nem apaga sessões, visitas, decisões ou
+eventos. Não há serviço auxiliar além deste processo. A consulta não sobe
+banco novo nem serviço de busca.
 
 ## Pré-requisitos
 
@@ -74,8 +75,11 @@ cadastros de `dados/`. Os arquivos de `dados/` não são alterados. Um diretóri
 já inicializado é reaberto como está: reiniciar não reaplica o seed nem desfaz
 reservas, cancelamentos, visitantes, autorizações, sessões, pendências,
 decisões ou eventos. O startup também não chama o modelo e não acrescenta
-eventos. Ele só publica uma proposta cujo evento de confirmação já estava
-gravado e ainda não tinha sido correlacionado. Não restaura visitantes.
+eventos. Ele reconstrói o índice do regulamento em memória, a partir de
+`dados/regulamento.md`, e só publica uma proposta cujo evento de confirmação
+já estava gravado e ainda não tinha sido correlacionado. Não restaura
+visitantes. Reiniciar não reaproveita o escopo de uma consulta anterior:
+cada mensagem nova calcula o seu.
 
 Para repetir uma carga inicial sem apagar um diretório já usado, aponte
 `AURORA_DATA_DIR` para uma pasta vazia e suba de novo.
@@ -92,7 +96,23 @@ Para repetir uma carga inicial sem apagar um diretório já usado, aponte
 A quadra, de taxa zero, é reservada na hora. Salão, churrasqueira e autorização
 de visitante ficam pendentes até `POST /sessoes/{session_id}/confirmacoes` com
 `id` e `confirmado` booleano. Cancelamento de reserva própria não pede
-confirmação. Consulta ao regulamento ainda não está disponível.
+confirmação. Dúvida sobre o regulamento usa a mesma rota de mensagens, sem
+rota nova.
+
+## Consulta ao regulamento
+
+Uma pergunta de regra segue o agente `regulamento`. A seleção usa o texto
+recebido pela API, não uma paráfrase do modelo. Horário de piscina no domingo
+sai do artigo 22, inciso II, da fonte. Pergunta vaga, pedido do documento
+inteiro ou tema sem regra respondem `200`, com esclarecimento ou ausência,
+e não criam pendência. A lista `confirmacoes_pendentes` continua sendo a do
+banco.
+
+O modelo em uso é o mesmo `GEMINI_MODEL` das specs anteriores. Limites ativos
+continuam os do projeto da chave; esta entrega não presume quota. Se a cota
+estourar, a mensagem falha sem gravar trecho que o código não autorizou.
+Reiniciar a API com o mesmo diretório preserva sessões, pendências e eventos.
+A consulta não decide confirmação e não altera reserva nem visitante.
 
 ## Confirmação e recuperação
 

@@ -34,7 +34,8 @@ Não repita número de apartamento. Não repita código que a ferramenta desta
 chamada não tenha devolvido.
 Depois do resultado, responda ao morador em texto com esses dados.
 Transfira para aurora_principal somente se a mensagem também pediu visitantes
-ou outro assunto. Não transfira de volta um assunto que você já resolveu.
+ou uma dúvida sobre o regulamento. Não transfira de volta um assunto que
+você já resolveu.
 """.strip()
 
 

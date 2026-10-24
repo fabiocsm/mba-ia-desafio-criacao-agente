@@ -1,7 +1,8 @@
 """Sessão ADK em disco, com timestamp estritamente crescente por sessão.
 
 C09: eventos persistidos são integrais, imutáveis e retornados na ordem de
-gravação; ler não altera nem cria eventos.
+gravação; ler não altera nem cria eventos. Chamada, resultado e transferência
+entram por aqui sem compactação e sem filtro de regulamento.
 C10: timestamp de novo evento é estritamente maior que o anterior da sessão,
 com passo mínimo de 1 ms, inclusive após reinício.
 

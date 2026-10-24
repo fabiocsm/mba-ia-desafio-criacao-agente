@@ -1,4 +1,9 @@
-"""Leitura integral dos eventos persistidos. Não filtra nem regrava."""
+"""Leitura integral dos eventos persistidos. Não filtra nem regrava.
+
+Chamadas, resultados e transferências permanecem completos, inclusive o
+trecho autorizado do regulamento. Este módulo não recebe o índice e não
+remove evento para esconder consulta.
+"""
 
 from __future__ import annotations
 

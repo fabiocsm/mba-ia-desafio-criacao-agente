@@ -1,26 +1,30 @@
-# Arquitetura — sessões, reservas, visitantes e confirmação
+# Arquitetura — sessões, reservas, visitantes, confirmação e regulamento
 
 O morador fala com `aurora_principal`. O código, não o texto do modelo, decide
-identidade, cobrança, cancelamento, autorização de entrada e exclusividade.
-Esta nota cobre a base da spec 001, as reservas da spec 002 e a autorização de
-visitantes da spec 003. O regulamento não entra nesta entrega.
+identidade, cobrança, cancelamento, autorização de entrada, exclusividade e
+quais trechos do regulamento podem ser lidos. Esta nota cobre a base da spec
+001, as reservas da spec 002, a autorização de visitantes da spec 003 e a
+consulta seletiva da spec 004.
 
 ## Agentes
 
-Os três agentes são `LlmAgent` em modo `chat`, com o modelo de `GEMINI_MODEL`
+Os quatro agentes são `LlmAgent` em modo `chat`, com o modelo de `GEMINI_MODEL`
 (default `gemini-3.5-flash-lite`). Estão na mesma árvore: `aurora_principal`
-tem `sub_agents` `reservas` e `visitantes`. Não há `AgentTool` nem sessão filha.
+tem `sub_agents` `reservas`, `visitantes` e `regulamento`. Não há `AgentTool`
+nem sessão filha.
 
-| Agente | Responsabilidade | Como é acionado |
-| --- | --- | --- |
-| `aurora_principal` | Entende o pedido e responde. Não lê o banco nem o regulamento. | É a raiz do `App`. |
-| `reservas` | Lista, reserva e cancela o que é do apartamento da sessão, e informa livre ou ocupada. | O principal transfere para ele. |
-| `visitantes` | Lista nome e data e pede autorização de entrada. A gravação só ocorre depois da confirmação do sistema. | O principal transfere para ele. |
+| Agente | Responsabilidade | Como é acionado | Motivo da divisão |
+| --- | --- | --- | --- |
+| `aurora_principal` | Entende o pedido e responde. Não lê o banco e não recebe o texto do regulamento. | É a raiz do `App`. | Um interlocutor só encaminha. |
+| `reservas` | Lista, reserva e cancela o que é do apartamento da sessão, e informa livre ou ocupada. | O principal transfere para ele. | Agenda de área, com efeito e disputa de data. |
+| `visitantes` | Lista nome e data e pede autorização de entrada. A gravação só ocorre depois da confirmação do sistema. | O principal transfere para ele. | Acesso de pessoas, com efeito diferente da reserva. |
+| `regulamento` | Responde dúvida de regra com os trechos já autorizados para aquela mensagem. | O principal transfere para ele. | A norma não pode entrar no prompt do principal nem ser escolhida pelo modelo. |
 
-A divisão separa agenda de áreas e acesso de pessoas. Cada especialista só
-recebe as próprias tools. Os especialistas usam `disallow_transfer_to_parent=False`
-e `disallow_transfer_to_peers=True`: devolvem a conversa ao principal e não se
-transferem entre si.
+A divisão separa agenda, acesso e norma. Cada especialista só recebe as
+próprias tools. Os três usam `disallow_transfer_to_parent=False` e
+`disallow_transfer_to_peers=True`: devolvem a conversa ao principal e não se
+transferem entre si. O de regulamento não chama executor de reserva nem de
+visitante.
 
 Tools de reserva, em `src/aurora/tools/reservas.py`:
 
@@ -37,10 +41,11 @@ Tools de visitante, em `src/aurora/tools/visitantes.py`:
 - `listar_meus_visitantes` — nome e data do apartamento canônico, ou lista vazia
 - `autorizar_visitante` — recebe só nome e data; pede confirmação e não grava
 
-A separação existe porque agenda de área e acesso de pessoas têm efeitos
-diferentes: a reserva disputa uma data, a visita acrescenta uma autorização.
-O especialista de visitantes não cancela reserva, e o de reservas não autoriza
-entrada. Os dois usam o mesmo coordenador de confirmação.
+A separação existe porque agenda de área, acesso de pessoas e norma têm
+efeitos diferentes. O especialista de visitantes não cancela reserva, o de
+reservas não autoriza entrada e o de regulamento não grava negócio. Reservas
+e visitantes usam o mesmo coordenador de confirmação. A consulta não cria
+pendência e não impõe horário, prazo, data passada ou capacidade à reserva.
 
 ## Execução
 
@@ -134,6 +139,36 @@ O processador nativo de confirmação não foi substituído. A evidência das
 reservas está em `docs/validacao/002-reservas.md`. A autorização de visitante
 repetiu o caminho: a retomada saiu de `visitantes`, antes e depois de reiniciar,
 com a visita gravada. A evidência está em `docs/validacao/003-visitantes.md`.
+
+## Consulta seletiva
+
+`dados/regulamento.md` continua somente leitura. `src/aurora/runtime/app.py`
+chama `reconstruir_indice` ao montar o `App`. O parser em
+`src/aurora/regulamento/parser.py` separa capítulo, artigo, inciso e parágrafo
+fora do Runner. O índice fica em memória, não entra em instrução, state,
+evento ou log de corpo. Erro de estrutura cita posição, não o texto.
+
+`src/aurora/regulamento/catalog.py` associa assunto e intenção a referências
+como `IV/22/II`. Não copia horário nem resposta. `src/aurora/regulamento/selection.py`
+lê a mensagem original da API, antes do Runner, e fecha o conjunto.
+`src/aurora/runtime/service.py` instala um `ConsultaScope` num `ContextVar`:
+sessão canônica, nonce aleatório da execução HTTP e os IDs autorizados. Esse
+nonce não é passado como `invocation_id`. O token é desfeito no `finally`.
+Confirmação e `GET /eventos` não instalam escopo. Startup não gera evento.
+
+`consultar_regulamento`, em `src/aurora/tools/regulamento.py`, não declara
+parâmetro para o modelo. Argumento extra devolve erro sem trecho. A tool
+confere a identidade da sessão e o escopo corrente; só então
+`materializar` devolve o texto literal daquelas unidades. Sem escopo, a
+resposta é esclarecimento com lista vazia. Chamada repetida na mesma
+mensagem não amplia o conjunto. Comando `topics=`, `path=` ou pedido de
+carga integral não autoriza outro capítulo.
+
+Status `esclarecer` ou `sem_base` faz o serviço trocar a resposta HTTP por
+uma frase fixa, sem norma inventada. O histórico em
+`src/aurora/runtime/sessions.py` e `src/aurora/runtime/events.py` guarda a
+chamada, o resultado e a transferência por completo. A rota de eventos não
+filtra trecho. Consulta anterior legítima permanece.
 
 ## Persistência
 

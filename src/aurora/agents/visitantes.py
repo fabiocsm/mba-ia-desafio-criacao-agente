@@ -33,7 +33,8 @@ Se a mensagem só disser que já confirmou, sem um novo nome e data, não chame
 autorizar_visitante de novo. Diga que a entrada continua pendente.
 Depois do resultado, responda ao morador em texto com esses dados.
 Transfira para aurora_principal somente se a mensagem também pediu reservas
-ou outro assunto. Não transfira de volta um assunto que você já resolveu.
+ou uma dúvida sobre o regulamento. Não transfira de volta um assunto que
+você já resolveu.
 """.strip()
 
 
