@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from google.adk.agents.llm_agent import LlmAgent
 
-from aurora.config import get_settings
+from aurora.agents.model import build_model
 from aurora.tools.visitantes import autorizar_visitante
 from aurora.tools.visitantes import listar_meus_visitantes
 
@@ -41,7 +41,7 @@ você já resolveu.
 def build_visitantes() -> LlmAgent:
     return LlmAgent(
         name="visitantes",
-        model=get_settings().gemini_model,
+        model=build_model(),
         mode="chat",
         description=(
             "Lista e autoriza visitantes do apartamento autenticado na sessão. "

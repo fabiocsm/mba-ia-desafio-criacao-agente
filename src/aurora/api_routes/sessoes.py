@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from aurora.api_routes.session_route import SessionRoute
 from aurora.errors import ApartamentoInexistente
 from aurora.errors import ExecucaoExpirada
 from aurora.errors import SessaoInexistente
@@ -15,7 +16,7 @@ from aurora.schemas import CriarSessaoResponse
 from aurora.schemas import MensagemRequest
 from aurora.schemas import MensagemResponse
 
-router = APIRouter()
+router = APIRouter(route_class=SessionRoute)
 
 
 def _runtime(request: Request):

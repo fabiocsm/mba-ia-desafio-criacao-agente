@@ -161,11 +161,15 @@ imutável, confirmação compartilhada com consumo transacional e recuperação 
 regulamento. Detalhes e fontes estão nos respectivos planos e pesquisas; as specs continuam
 definindo os requisitos, sem substituir as garantias por decisões de arquitetura.
 
-As cinco specs estão prontas para implementação, respeitando suas dependências. Todas as
-tarefas permanecem desmarcadas. Checklists e análises atestam **qualidade e coerência dos
-artefatos**, não funcionamento da aplicação. Acesso e quotas ativos do Gemini, confirmação
-ADK com SQLite e aprovação após reinício, demais fluxos de runtime, os 15 passos completos,
-os 28 critérios e publicação do fork em `main` ainda exigem execução e evidências reais.
+As specs 001–004 estão implementadas, com suas tarefas concluídas e evidências em
+`docs/validacao/`. A 005 também implementa restauração e manual; suas tarefas finais
+distinguem ensaio do candidato, integração em `main` e avaliação do conteúdo publicado.
+Checklists e análises atestam **qualidade e coerência dos artefatos**; os relatórios de
+validação registram o que foi executado. O estado corrente está na
+[auditoria do README da main](../docs/validacao/auditoria-readme-main.md).
+O fork público existe, mas a implementação ainda depende da integração em `main`,
+conforme [entrega](../docs/entrega.md). Acesso e quotas Gemini devem ser conferidos
+com a chave de cada avaliador, sem presumir limites fixos.
 O enunciado original está preservado em [docs/desafio-original.md](../docs/desafio-original.md). O README da raiz é o manual de entrega.
 
 O seletor `.specify/feature.json` aponta para **001-sessoes-isolamento**, primeira da sequência.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from google.adk.agents.llm_agent import LlmAgent
 
-from aurora.config import get_settings
+from aurora.agents.model import build_model
 from aurora.tools.reservas import cancelar_minha_reserva
 from aurora.tools.reservas import consultar_disponibilidade
 from aurora.tools.reservas import listar_minhas_reservas
@@ -42,7 +42,7 @@ você já resolveu.
 def build_reservas() -> LlmAgent:
     return LlmAgent(
         name="reservas",
-        model=get_settings().gemini_model,
+        model=build_model(),
         mode="chat",
         description=(
             "Reserva e cancela áreas do morador autenticado e informa "

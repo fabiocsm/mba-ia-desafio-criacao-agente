@@ -29,6 +29,11 @@ A divisão separa agenda, acesso e norma. Cada especialista só recebe as
 próprias tools, em `src/aurora/tools/reservas.py`,
 `src/aurora/tools/visitantes.py` e `src/aurora/tools/regulamento.py`.
 
+`src/aurora/agents/model.py` configura até quatro tentativas HTTP para
+falhas transitórias do Gemini, com espera progressiva limitada. A repetição
+fica na chamada ao modelo; não reinicia o Runner nem reexecuta tools.
+O prazo total de atendimento continua limitado a 120 segundos.
+
 `src/aurora/runtime/service.py` sobe um `AuroraRunner`
 (`src/aurora/runtime/runner.py`) com `OrderedDatabaseSessionService`. Cada
 execução usa o `session_id` também como `user_id`. O cliente não envia agente,
@@ -50,7 +55,9 @@ Reserva com taxa maior que zero e autorização de visitante chamam
 evento `adk_request_confirmation` é persistido. Só
 `POST /sessoes/{session_id}/confirmacoes` decide.
 
-A rota confere a sessão antes de aceitar o corpo. ID inexistente, de outra
+A classe `SessionRoute` confere a sessão antes de ler ou validar o corpo,
+inclusive se o JSON estiver inválido: sessão ausente recebe `404` nas três
+rotas de sessão (`src/aurora/api_routes/session_route.py`). ID inexistente, de outra
 sessão ou já respondido recebe `409` sem efeito
 (`src/aurora/api_routes/confirmacoes.py`, `confirmar`). `AuroraRuntime.confirmar`
 grava a decisão e só então retoma o `Runner` na invocação original
@@ -105,7 +112,10 @@ A instrução de `aurora_principal` diz que ele não tem o texto do regulamento
 `dados/regulamento.md` não é copiado para esse prompt.
 
 Antes do `Runner`, `autorizar_mensagem` escolhe as unidades da mensagem HTTP
-original (`src/aurora/regulamento/selection.py`). `consultar_regulamento` não
+original (`src/aurora/regulamento/selection.py`). Com escopo válido, o callback
+`exigir_consulta_atual` impede o especialista de responder ou transferir antes
+de consultar a fonte nesta invocação (`src/aurora/agents/regulamento.py`). Uma
+consulta de mensagem anterior não satisfaz essa condição. `consultar_regulamento` não
 aceita tema nem capítulo: `consultar` só materializa o escopo já autorizado
 (`src/aurora/tools/regulamento.py`). Sem escopo, o retorno não traz trecho.
 Os eventos guardam a chamada e o resultado dessa consulta, não os outros
@@ -151,8 +161,9 @@ terminal e não versione `.env`.
 
 `.env.example` traz só os nomes, sem valores. O projeto fixa `google-adk==2.2.0`.
 
-Antes do roteiro, confira na documentação do Gemini e no AI Studio do projeto
-da chave os limites ativos (RPM, TPM e RPD) do modelo escolhido. O fluxo do
+Antes do roteiro, confira a [documentação do modelo](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite)
+e os [limites ativos no AI Studio](https://ai.google.dev/gemini-api/docs/rate-limits)
+do projeto da chave (RPM, TPM e RPD). O fluxo do
 avaliador gasta várias chamadas por mensagem. Este repositório não presume
 quota. Em 2026-10-23 a API deste projeto respondeu `429` com 15 requisições
 por minuto no free tier de `gemini-3.5-flash-lite`; TPM e RPD não vieram nessa
@@ -202,3 +213,26 @@ entre os dois arquivos SQLite; o marcador é o que impede servir um estado pela
 metade. Apague o marcador só por um `restaurar` concluído, não na mão.
 
 A operação longa está em [docs/operacao.md](docs/operacao.md).
+
+### Conferir a implementação
+
+Com a porta 8000 livre e a chave configurada:
+
+```bash
+uv run python -m unittest discover -v
+uv run python scripts/validar_fluxo.py --intervalo 30
+```
+
+O primeiro comando executa regressões locais sem chamadas ao Gemini.
+O segundo percorre os passos HTTP 1–14 do avaliador com Gemini real,
+incluindo reinício, disputa simultânea e confirmações após reinício.
+Ele inicia e encerra a API e restaura somente bancos descartáveis próprios;
+não usa o diretório de dados configurado pelo morador. Salva respostas e
+eventos completos em `var/evidencias/auditoria-*/`, ignorado pelo Git.
+Ajuste o intervalo entre execuções aos limites ativos da chave; a pausa
+não garante quota. Uma falha encerra a execução com código não zero.
+
+O passo 15 exige também inspeção de código, dados, segredos e referências.
+O resultado da auditoria e a pendência de integração em `main` estão em
+[auditoria do README da main](docs/validacao/auditoria-readme-main.md) e
+[entrega](docs/entrega.md).

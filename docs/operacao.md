@@ -50,6 +50,13 @@ Se o modelo estiver indisponível, troque `GEMINI_MODEL` para uma alternativa
 já conferida no projeto, como `gemini-3.8-flash`, e repita o script. Não há
 troca automática.
 
+Os agentes configuram até quatro tentativas HTTP para erros transitórios
+do Gemini (408, 429, 500, 502, 503 e 504), com backoff limitado a oito
+segundos entre tentativas. Isso repete somente a chamada ao modelo, sem
+reiniciar o Runner nem reexecutar tools. Falhas permanentes, como chave
+inválida ou acesso negado, não são repetidas. A configuração está em
+`src/aurora/agents/model.py` e não garante disponibilidade ou quota.
+
 O probe limita cada chamada HTTP a 120 segundos. Na API, cada execução do
 Runner tem prazo total de 120 segundos, incluindo as chamadas ao modelo e
 tools. Se esse prazo expirar, a API cancela a execução, libera a sessão para

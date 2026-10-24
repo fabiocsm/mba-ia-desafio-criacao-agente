@@ -1,5 +1,9 @@
 # Validação integral da spec 005
 
+Registro histórico da implementação da spec 005. A verificação corrente
+do README de `main` está na [auditoria de conformidade](auditoria-readme-main.md),
+incluindo correções posteriores e o estado público do fork.
+
 Evidência registra resultado observado por passo e só marca aprovado após conferir resposta, armazenamento e eventos aplicáveis; ausência de execução é não executado, nunca aprovado.
 
 Data do registro: 2026-10-24. Ambiente: macOS, Python 3.12.12, `uv`, `google-adk==2.2.0` (pacote instalado e pin de `pyproject.toml` / `uv.lock`). Commit de partida das specs 001–004: `4edaf65bf97e6f87a88a795105093b597dc18f38` (`dev`). As mudanças da 005 estavam no worktree, ainda sem commit próprio. A chave não foi impressa. Snapshots locais, quando existirem, ficam em `var/evidencias/005/`, coberto por `var/` no `.gitignore`.
@@ -68,7 +72,7 @@ Ensaio em 2026-10-24 numa árvore limpa em `/private/tmp/aurora-limpo-005`: rsyn
 | 12 | aprovado | Resposta com o art. 22, II, fechamento às 20h. Referências nos eventos: só `IV/22` e `IV/22/II`. Tool `consultar_regulamento`. 78 eventos |
 | 13 | aprovado | Depois do restart, o JSON canônico dos 78 eventos coincidiu. Nova mensagem 200 elevou a contagem para 89 e preservou o prefixo. 101 manteve quadra `2030-04-06`, salão `2030-04-20` e Joana. 302 manteve `RSV-4821`. Códigos novos fora de `RSV-1377`, `RSV-4821` e `RSV-2950` |
 | 14 | aprovado | S3/101 e S4/201 com pendência de salão `2030-05-11`. Aprovações simultâneas 200 e 200. Uma reserva, `RSV-4824`, no 101. A resposta e os eventos do 201 não contêm esse código |
-| 15 | não aprovado | Inspeção de código e de contrato registrada abaixo. O fork público em `main` não existe; o passo não fecha |
+| 15 | não aprovado | Inspeção de código e de contrato registrada abaixo. A implementação completa ainda não foi integrada à `main` do fork público; o passo não fecha |
 
 ## Critérios de aceite
 

@@ -7,7 +7,7 @@ from google.adk.agents.llm_agent import LlmAgent
 from aurora.agents.regulamento import build_regulamento
 from aurora.agents.reservas import build_reservas
 from aurora.agents.visitantes import build_visitantes
-from aurora.config import get_settings
+from aurora.agents.model import build_model
 
 INSTRUCAO = """
 Você é o assistente do Residencial Aurora. O morador já está autenticado pela
@@ -44,7 +44,7 @@ invente visitante nem apartamento.
 def build_principal() -> LlmAgent:
     return LlmAgent(
         name="aurora_principal",
-        model=get_settings().gemini_model,
+        model=build_model(),
         mode="chat",
         description=(
             "Interlocutor do Residencial Aurora. Encaminha reservas, "

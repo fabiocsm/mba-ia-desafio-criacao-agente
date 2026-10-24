@@ -28,8 +28,12 @@ class RegulationCallsModel(BaseLlm):
                 name="transfer_to_agent", args={"agent_name": "regulamento"}
             ))
         elif any(part.function_response for part in last.parts):
+            assert llm_request.config.tool_config.function_calling_config.mode == "AUTO"
             part = types.Part(text="Consulta concluída.")
         else:
+            config = llm_request.config.tool_config.function_calling_config
+            assert config.mode == "ANY"
+            assert config.allowed_function_names == ["consultar_regulamento"]
             part = types.Part(function_call=types.FunctionCall(
                 name="consultar_regulamento", args={}
             ))

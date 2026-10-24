@@ -13,6 +13,11 @@ Os quatro agentes são `LlmAgent` em modo `chat`, com o modelo de `GEMINI_MODEL`
 tem `sub_agents` `reservas`, `visitantes` e `regulamento`. Não há `AgentTool`
 nem sessão filha.
 
+`agents/model.py` constrói o adaptador `Gemini` com repetição HTTP limitada
+para falhas transitórias. O backoff pertence ao SDK, dentro do prazo do
+runtime; não repete o Runner nem os efeitos das tools. Modelo e topologia
+permanecem os mesmos na retomada das confirmações.
+
 | Agente | Responsabilidade | Como é acionado | Motivo da divisão |
 | --- | --- | --- | --- |
 | `aurora_principal` | Entende o pedido e responde. Não lê o banco e não recebe o texto do regulamento. | É a raiz do `App`. | Um interlocutor só encaminha. |
@@ -92,7 +97,8 @@ O contrato interno está em
 2. `OrderedDatabaseSessionService.append_event` publica a pendência com o ID
    novo do ADK, a invocação e o autor. Startup só repete essa correlação. Não
    chama o Runner e não cria eventos.
-3. `POST /sessoes/{session_id}/confirmacoes` confere a sessão antes do corpo,
+3. `SessionRoute` confere a sessão antes de ler o corpo nas três rotas de
+   sessão, inclusive com JSON inválido. `POST /sessoes/{session_id}/confirmacoes`
    grava a decisão e o despacho `recuperar` e só então chama
    `ConfirmationCoordinator.resume`.
 4. A retomada manda `FunctionResponse` de `adk_request_confirmation` ao Runner,
@@ -155,6 +161,13 @@ lê a mensagem original da API, antes do Runner, e fecha o conjunto.
 sessão canônica, nonce aleatório da execução HTTP e os IDs autorizados. Esse
 nonce não é passado como `invocation_id`. O token é desfeito no `finally`.
 Confirmação e `GET /eventos` não instalam escopo. Startup não gera evento.
+
+O callback `exigir_consulta_atual`, em `src/aurora/agents/regulamento.py`,
+limita a escolha de função a `consultar_regulamento` quando existe escopo
+válido e ainda não há retorno dessa tool na invocação atual. Uma consulta
+antiga não libera a resposta atual. Depois da leitura, a escolha volta a
+`AUTO`, permitindo resposta ou transferência conforme o pedido. O callback
+não fornece normas, não amplia o conjunto e não altera eventos anteriores.
 
 `consultar_regulamento`, em `src/aurora/tools/regulamento.py`, não declara
 parâmetro para o modelo. Argumento extra devolve erro sem trecho. A tool
