@@ -54,7 +54,8 @@ class MensagemResponse(BaseModel):
 class ConfirmacaoRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    id: StrictStr = Field(min_length=1)
+    # ID vazio não está pendente: segue para a decisão e recebe 409.
+    id: StrictStr
     confirmado: StrictBool
 
 

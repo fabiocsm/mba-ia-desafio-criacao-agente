@@ -178,22 +178,9 @@ imprime a chave e não mede a quota. Se o modelo estiver indisponível, troque
 `GEMINI_MODEL` para uma alternativa já conferida, como `gemini-3.8-flash`, e
 repita o script.
 
-### Subida
-
-Com a restauração já feita, ou no primeiro uso de um diretório vazio:
-
-```bash
-uv run aurora serve
-```
-
-A API fica em `http://localhost:8000`, um worker, sem reload. Subir não
-restaura dados, não apaga sessões e não cria eventos. Pare com Ctrl+C e
-aguarde o processo encerrar. Subir de novo com o mesmo diretório continua a
-mesma base.
-
 ### Restauração
 
-Com a API parada:
+Com a API parada, antes da primeira subida:
 
 ```bash
 uv run aurora restaurar
@@ -211,6 +198,19 @@ dados e `aurora serve` recusa iniciar. Pare todos os processos e repita
 `uv run aurora restaurar` até a mensagem de conclusão. Não há commit único
 entre os dois arquivos SQLite; o marcador é o que impede servir um estado pela
 metade. Apague o marcador só por um `restaurar` concluído, não na mão.
+
+### Subida
+
+Depois da restauração:
+
+```bash
+uv run aurora serve
+```
+
+A API fica em `http://localhost:8000`, um worker, sem reload. Subir não
+restaura dados, não apaga sessões e não cria eventos. Pare com Ctrl+C e
+aguarde o processo encerrar. Subir de novo com o mesmo diretório continua a
+mesma base.
 
 A operação longa está em [docs/operacao.md](docs/operacao.md).
 

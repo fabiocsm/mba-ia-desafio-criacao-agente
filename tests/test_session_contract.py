@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from aurora.api_routes.confirmacoes import router as confirmacoes
 from aurora.api_routes.sessoes import router as sessoes
+from aurora.errors import ConfirmacaoConflito
 from aurora.errors import SessaoInexistente
 
 
@@ -59,6 +60,17 @@ class SessionContractTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(response.status_code, 422)
         self.runtime.confirmar.assert_not_awaited()
+
+    async def test_unknown_or_empty_confirmation_id_is_409(self):
+        self.runtime.confirmar.side_effect = ConfirmacaoConflito
+        for proposal_id in ("id-inexistente", ""):
+            with self.subTest(proposal_id=proposal_id):
+                response = await self.client.post(
+                    "/sessoes/existente/confirmacoes",
+                    json={"id": proposal_id, "confirmado": True},
+                )
+                self.assertEqual(response.status_code, 409)
+                self.runtime.confirmar.assert_awaited_with("existente", proposal_id, True)
 
     async def test_confirmation_schema_and_boolean_decision_remain_in_contract(self):
         self.runtime.confirmar.return_value = {

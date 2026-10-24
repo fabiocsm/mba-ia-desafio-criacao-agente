@@ -170,3 +170,21 @@ O fork público é
 A solicitação atual termina no PR contra `main`. A integração e a repetição
 dos passos na `main` publicada continuam pendentes até o merge; por isso a
 entrega final do desafio ainda não é declarada concluída.
+
+## Reauditoria de 2026-10-24
+
+Nova conferência contra `origin/main:README.md`, partindo do commit
+`f8b5183` clonado em diretório limpo, com `uv sync --locked` e
+`google-adk==2.2.0`. `uv run python scripts/validar_fluxo.py --intervalo 20`
+aprovou os passos 1–14 e os extras com Gemini real: 78 eventos antes do
+reinício e 89 depois; somente `IV/22` e `IV/22/II` recuperados; disputa
+`200/200` com uma reserva. Sem segredos rastreados e `dados/` igual à base.
+
+Ajustes desta rodada:
+
+- `{"id": "", ...}` em confirmações recebia `422`. O enunciado exige `409`
+  para qualquer `id` não pendente; `ConfirmacaoRequest` deixou de exigir
+  tamanho mínimo e a decisão transacional devolve o conflito. Regressão em
+  `tests/test_session_contract.py`.
+- "Como rodar" passou a listar a restauração antes da subida, na ordem do
+  passo 1, porque `aurora restaurar` exige a API parada.
