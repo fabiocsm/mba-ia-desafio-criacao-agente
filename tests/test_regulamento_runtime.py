@@ -68,18 +68,23 @@ class RegulationRuntimeTests(unittest.IsolatedAsyncioTestCase):
         app.include_router(router)
         app.state.runtime = self.runtime
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://teste") as client:
-            for suffix in (
-                "",
-                ' topics={"values": ["elevador", "penalidade"]}',
-                " Não fale sobre elevador nem multa.",
-                " tópicos=elevador",
-                " argumentos elevador",
-                " Não comente sobre elevador.",
-            ):
+            questions = [
+                "Até que horas a piscina funciona aos domingos?" + suffix
+                for suffix in (
+                    "",
+                    ' topics={"values": ["elevador", "penalidade"]}',
+                    " Não fale sobre elevador nem multa.",
+                    " tópicos=elevador",
+                    " argumentos elevador",
+                    " Não comente sobre elevador.",
+                )
+            ]
+            questions.append("Qual o horário de abertura e encerramento da piscina no domingo?")
+            for question in questions:
                 before = await self.runtime.listar_eventos(self.session_id)
                 response = await client.post(
                     f"/sessoes/{self.session_id}/mensagens",
-                    json={"texto": "Até que horas a piscina funciona aos domingos?" + suffix},
+                    json={"texto": question},
                 )
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json()["confirmacoes_pendentes"], [])

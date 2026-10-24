@@ -76,6 +76,54 @@ class RegulationSelectionTests(unittest.TestCase):
             {"IV/22", "IV/22/II", "VIII/54"},
         )
 
+    def test_coordinated_intention_can_precede_its_subject(self):
+        for question in (
+            "Qual o horário de abertura e encerramento da piscina no domingo?",
+            "Qual é o horário de abertura e fechamento da piscina aos domingos?",
+        ):
+            with self.subTest(question=question):
+                self.assert_selection(question, {"IV/22", "IV/22/II"})
+        self.assert_selection(
+            "Qual o horário de abertura e encerramento da piscina no domingo "
+            "e como levar cão no elevador?",
+            {"IV/22", "IV/22/II", "VIII/55"},
+        )
+
+    def test_unknown_or_ambiguous_prefix_does_not_expand_other_subjects(self):
+        cases = (
+            ("Qual o horário da farmácia aos domingos e posso levar convidado à piscina?",
+             {"IV/27"}),
+            ("Qual o horário da piscina ou da academia "
+             "e qual o limite de velocidade na garagem?", {"XI/78"}),
+        )
+        for question, expected in cases:
+            with self.subTest(question=question):
+                self.assert_selection(question, expected)
+
+    def test_garage_rental_and_cession_retrieve_the_specific_rule(self):
+        for question in (
+            "Posso alugar minha vaga de garagem para alguém de fora do condomínio?",
+            "Posso alugar minha vaga de garagem para outro morador?",
+            "Como funciona o aluguel de vaga na garagem?",
+            "Como funciona a locação de vaga de garagem entre moradores?",
+            "Posso ceder minha vaga de garagem a uma pessoa de fora?",
+            "Qual é a regra de cessão de vaga de garagem para outro morador?",
+        ):
+            with self.subTest(question=question):
+                self.assert_selection(question, {"XI/80", "XI/80/paragrafo-unico"})
+        self.assert_selection(
+            "Como devo estacionar na minha vaga de garagem?",
+            {"XI/77", "XI/77/paragrafo-unico"},
+        )
+        self.assert_selection(
+            "Como estacionar na vaga da garagem e posso alugar minha vaga de garagem?",
+            {"XI/77", "XI/77/paragrafo-unico", "XI/80", "XI/80/paragrafo-unico"},
+        )
+        self.assert_selection(
+            "Como estacionar e alugar uma vaga de garagem?",
+            {"XI/77", "XI/77/paragrafo-unico", "XI/80", "XI/80/paragrafo-unico"},
+        )
+
     def test_existing_rules_do_not_become_documentary_absence(self):
         cases = (
             ("Preciso cadastrar meu cachorro na administração?", {"VIII/53"}),

@@ -25,6 +25,7 @@ class Intencao:
     grupos: tuple[tuple[str, ...], ...]
     unidades: tuple[str, ...] = ()
     artigos: tuple[str, ...] = ()
+    exclusoes: tuple[str, ...] = ()
 
 
 ASSUNTOS: tuple[Assunto, ...] = (
@@ -73,7 +74,7 @@ ASSUNTOS: tuple[Assunto, ...] = (
     Assunto("obra", ("obra", "reforma", "entulho")),
     Assunto(
         "garagem",
-        ("garagem", "vaga de garagem", "bicicletario", "carregador"),
+        ("garagem", "vaga de garagem", "bicicletario", "carregador", "estacionar"),
     ),
     Assunto("lixo", ("lixo", "reciclagem", "coleta seletiva", "residuo")),
     Assunto("penalidade", ("multa", "penalidade", "advertencia", "infracao")),
@@ -85,9 +86,10 @@ ASSUNTOS: tuple[Assunto, ...] = (
 
 
 def _artigo(
-    assunto: str, artigo: str, *grupos: tuple[str, ...]
+    assunto: str, artigo: str, *grupos: tuple[str, ...],
+    exclusoes: tuple[str, ...] = (),
 ) -> Intencao:
-    return Intencao(assunto, grupos, artigos=(artigo,))
+    return Intencao(assunto, grupos, artigos=(artigo,), exclusoes=exclusoes)
 
 
 def _trechos(
@@ -96,7 +98,10 @@ def _trechos(
     return Intencao(assunto, grupos, unidades=unidades)
 
 
-_SINAIS_HORA = ("horario", "horas", "funciona", "abre", "fecha", "quando")
+_SINAIS_HORA = (
+    "horario", "horas", "funciona", "abre", "fecha", "quando",
+    "abertura", "fechamento", "encerramento",
+)
 _DIAS_SEMANA = (
     "segunda",
     "terca",
@@ -114,6 +119,7 @@ _HORAS_SEMANA = tuple(
 _HORAS_DOMINGO = tuple(
     (dia, sinal) for dia in _DIAS_DOMINGO for sinal in _SINAIS_HORA
 )
+_SINAIS_CESSAO_VAGA = ("alugar", "aluguel", "locacao", "ceder", "cessao")
 
 INTENCOES: tuple[Intencao, ...] = (
     _artigo("sindico", "I/3", ("atribuicao",), ("eleicao",), ("sindico",)),
@@ -189,9 +195,14 @@ INTENCOES: tuple[Intencao, ...] = (
     _artigo("obra", "X/69", ("comunicar",), ("projeto",), ("engenheiro",)),
     _artigo("obra", "X/70", ("horario",), ("horas",), ("barulho",)),
     _artigo("obra", "X/72", ("entulho",), ("material",), ("lona",)),
-    _artigo("garagem", "XI/77", ("vaga",), ("estacionar",)),
+    _artigo(
+        "garagem", "XI/77", ("vaga",),
+        exclusoes=_SINAIS_CESSAO_VAGA,
+    ),
+    _artigo("garagem", "XI/77", ("estacionar",)),
     _artigo("garagem", "XI/78", ("velocidade",), ("km",), ("buzina",)),
     _artigo("garagem", "XI/79", ("proibido",), ("lavar",), ("oleo",)),
+    _artigo("garagem", "XI/80", *((sinal,) for sinal in _SINAIS_CESSAO_VAGA)),
     _artigo("garagem", "XI/81", ("carregador",), ("eletrico",)),
     _artigo("garagem", "XI/82", ("bicicleta",), ("bicicletario",)),
     _artigo("lixo", "XII/83", ("saco",), ("lixeira",), ("depositar",)),

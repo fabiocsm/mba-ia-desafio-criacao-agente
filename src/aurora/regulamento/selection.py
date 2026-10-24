@@ -190,4 +190,6 @@ def _tem(texto: str, sinal: str) -> bool:
 
 
 def _completa(texto: str, intencao: Intencao) -> bool:
-    return any(all(_tem(texto, sinal) for sinal in grupo) for grupo in intencao.grupos)
+    return not any(_tem(texto, sinal) for sinal in intencao.exclusoes) and any(
+        all(_tem(texto, sinal) for sinal in grupo) for grupo in intencao.grupos
+    )
