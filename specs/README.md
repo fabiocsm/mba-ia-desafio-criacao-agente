@@ -1,6 +1,6 @@
 # Especificações do assistente do Residencial Aurora
 
-Criadas em 2026-10-23 a partir do [enunciado](../README.md) e da
+Criadas em 2026-10-23 a partir do [enunciado](../docs/desafio-original.md) e da
 [constituição 1.0.0](../.specify/memory/constitution.md).
 
 ## Divisão e ordem de execução
@@ -166,7 +166,7 @@ tarefas permanecem desmarcadas. Checklists e análises atestam **qualidade e coe
 artefatos**, não funcionamento da aplicação. Acesso e quotas ativos do Gemini, confirmação
 ADK com SQLite e aprovação após reinício, demais fluxos de runtime, os 15 passos completos,
 os 28 critérios e publicação do fork em `main` ainda exigem execução e evidências reais.
-O README do enunciado permanece preservado; sua substituição é tarefa futura da 005.
+O enunciado original está preservado em [docs/desafio-original.md](../docs/desafio-original.md). O README da raiz é o manual de entrega.
 
 O seletor `.specify/feature.json` aponta para **001-sessoes-isolamento**, primeira da sequência.
 Para trabalhar em outra spec, indicar explicitamente seu diretório absoluto como

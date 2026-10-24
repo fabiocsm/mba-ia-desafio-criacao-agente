@@ -53,6 +53,7 @@ from aurora.storage.confirmacoes import sessoes_preparando
 from aurora.storage.database import dispose_engine
 from aurora.storage.database import get_engine
 from aurora.storage.identity import criar_sessao_coordenada
+from aurora.storage.maintenance import marker_present
 from aurora.storage.identity import obter_identidade
 from aurora.storage.reservas import executar_reserva_paga
 from aurora.storage.reservas import validar_parametros_reserva
@@ -137,6 +138,11 @@ class AuroraRuntime:
     @classmethod
     async def start(cls) -> AuroraRuntime:
         settings = get_settings()
+        if marker_present(settings.data_dir):
+            raise RuntimeError(
+                "Restauração incompleta. A API não inicia. "
+                "Execute uv run aurora restaurar com o serviço parado."
+            )
         export_api_key(settings)
         initialize_storage(get_engine(), settings.dados_dir)
         registrar_acoes()

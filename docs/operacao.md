@@ -1,12 +1,8 @@
-# Operação da API — sessões, reservas, visitantes, confirmação e regulamento
+# Operação da API
 
-Este manual cobre a base da spec 001, as reservas com confirmação da spec 002,
-a autorização de visitantes da spec 003 e a consulta ao regulamento da spec
-004. O README do enunciado permanece na raiz. A restauração explícita de
-reservas e visitantes, e o manual final de entrega, ficam para a spec 005.
-Subir a API não restaura dados nem apaga sessões, visitas, decisões ou
-eventos. Não há serviço auxiliar além deste processo. A consulta não sobe
-banco novo nem serviço de busca.
+Manual de subida, restauração e limites. O README da raiz resume o mesmo
+caminho. O enunciado do desafio está em `docs/desafio-original.md`. Não há
+serviço auxiliar além deste processo.
 
 ## Pré-requisitos
 
@@ -14,7 +10,8 @@ banco novo nem serviço de busca.
 - [uv](https://docs.astral.sh/uv/)
 - Chave própria do Google AI Studio
 
-Não há banco externo, fila ou outro serviço local para subir.
+Não há banco externo, fila ou outro serviço local para subir. Os dois SQLite
+ficam no diretório de dados.
 
 ## Configuração
 
@@ -34,7 +31,9 @@ terminal e não versione `.env`.
 | `GEMINI_MODEL` | Opcional. Vazio usa `gemini-3.5-flash-lite`. |
 | `AURORA_DATA_DIR` | Opcional. Vazio usa `var/` na raiz do repositório. Caminho relativo é resolvido a partir dessa raiz. |
 
-`.env.example` traz somente os nomes, sem valores. `.env` e `var/` ficam fora do Git.
+Os nomes vêm de `src/aurora/config.py`. `.env.example` traz somente esses
+nomes, sem valores. `.env` e `var/` ficam fora do Git. O pin é
+`google-adk==2.2.0`.
 
 ## Modelo
 
@@ -60,6 +59,13 @@ continuam disponíveis integralmente em `/sessoes/{session_id}/eventos`;
 o prazo não apaga nem desfaz esses registros. Mensagens da mesma sessão são
 serializadas; o prazo de execução começa após a espera pela mensagem anterior.
 
+Em 2026-10-23, `uv run python scripts/check_model.py` respondeu
+`modelo=gemini-3.5-flash-lite` e `chamada_de_funcao=sim`, sem imprimir a chave.
+No mesmo dia, a API respondeu `429` com o limite do free tier: 15 requisições
+por minuto para `gemini-3.5-flash-lite`. TPM e RPD não vieram nessa resposta.
+Uma mensagem com transferência entre agentes gasta várias chamadas. Com esse
+teto, vale espaçar as mensagens. O número não vale para outra chave.
+
 ## Subida
 
 ```bash
@@ -69,22 +75,64 @@ uv run aurora serve
 O comando executa Uvicorn em `0.0.0.0:8000` com um worker e sem reload. A API
 responde em `http://localhost:8000`.
 
-No primeiro uso de um diretório de dados ainda sem a marca de inicialização, a
-API cria `aurora.sqlite3` e `adk.sqlite3` e importa, numa única transação, os
-cadastros de `dados/`. Os arquivos de `dados/` não são alterados. Um diretório
-já inicializado é reaberto como está: reiniciar não reaplica o seed nem desfaz
-reservas, cancelamentos, visitantes, autorizações, sessões, pendências,
-decisões ou eventos. O startup também não chama o modelo e não acrescenta
-eventos. Ele reconstrói o índice do regulamento em memória, a partir de
+O processo pega o lock compartilhado de `operation.lock` antes de abrir
+qualquer banco e o segura até encerrar. Não chama `restaurar`. No primeiro uso
+de um diretório ainda sem a marca de inicialização, cria `aurora.sqlite3` e
+`adk.sqlite3` e importa, numa única transação, os cadastros de `dados/`. Os
+arquivos de `dados/` não são alterados. Um diretório já inicializado é
+reaberto como está: reiniciar não reaplica o seed nem desfaz reservas,
+cancelamentos, visitantes, autorizações, sessões, pendências, decisões ou
+eventos. O startup também não chama o modelo e não acrescenta eventos. Ele
+reconstrói o índice do regulamento em memória, a partir de
 `dados/regulamento.md`, e só publica uma proposta cujo evento de confirmação
-já estava gravado e ainda não tinha sido correlacionado. Não restaura
-visitantes. Reiniciar não reaproveita o escopo de uma consulta anterior:
-cada mensagem nova calcula o seu.
+já estava gravado e ainda não tinha sido correlacionado.
 
-Para repetir uma carga inicial sem apagar um diretório já usado, aponte
-`AURORA_DATA_DIR` para uma pasta vazia e suba de novo.
+Se existir `reset-in-progress.json`, `serve` termina com erro e não abre a
+API. Repita a restauração com todos os processos parados.
 
-## O que esta versão atende
+## Restauração
+
+Com a API parada e o processo anterior já encerrado:
+
+```bash
+uv run aurora restaurar
+```
+
+Sucesso só depois de conferir os dois bancos. O comando:
+
+- não edita `dados/`
+- apaga sessões, eventos, propostas, decisões e despachos
+- elimina pendências; nenhuma confirmação antiga volta a executar
+- repõe reservas e visitantes iniciais, estes com `proposta_id` nulo
+- preserva apartamentos, áreas, o ledger de todos os códigos emitidos e o
+  contador monotônico
+
+Sessão antiga responde `404`. Código inicial, cancelado ou emitido antes do
+reset não é reutilizado.
+
+Se `serve` ainda estiver ativo, `restaurar` retorna código diferente de zero
+antes de criar o marcador e antes de escrever nos bancos.
+
+Não há transação única entre `aurora.sqlite3` e `adk.sqlite3`. O marcador
+`reset-in-progress.json` é criado antes da primeira alteração. Se o processo
+cair depois disso, o marcador fica e `serve` continua recusando a subida,
+mesmo que o banco de negócio já tenha voltado ao início e o do ADK ainda não.
+Pare tudo e execute `uv run aurora restaurar` de novo. A repetição é
+idempotente: no fim, as duas bases correspondem ao reset e o marcador sai.
+Não apague o marcador nem o arquivo de lock à mão. Não remova o banco do ADK
+com a API no ar.
+
+Para repetir um roteiro sem mexer no diretório padrão, use outro caminho:
+
+```bash
+AURORA_DATA_DIR=var/ensaio uv run aurora restaurar
+AURORA_DATA_DIR=var/ensaio uv run aurora serve
+```
+
+Os dois comandos precisam do mesmo `AURORA_DATA_DIR`, porque o lock e o
+marcador ficam nesse diretório.
+
+## Rotas
 
 - `POST /sessoes`
 - `POST /sessoes/{session_id}/mensagens`
@@ -96,8 +144,7 @@ Para repetir uma carga inicial sem apagar um diretório já usado, aponte
 A quadra, de taxa zero, é reservada na hora. Salão, churrasqueira e autorização
 de visitante ficam pendentes até `POST /sessoes/{session_id}/confirmacoes` com
 `id` e `confirmado` booleano. Cancelamento de reserva própria não pede
-confirmação. Dúvida sobre o regulamento usa a mesma rota de mensagens, sem
-rota nova.
+confirmação. Dúvida sobre o regulamento usa a mesma rota de mensagens.
 
 ## Consulta ao regulamento
 
@@ -105,14 +152,7 @@ Uma pergunta de regra segue o agente `regulamento`. A seleção usa o texto
 recebido pela API, não uma paráfrase do modelo. Horário de piscina no domingo
 sai do artigo 22, inciso II, da fonte. Pergunta vaga, pedido do documento
 inteiro ou tema sem regra respondem `200`, com esclarecimento ou ausência,
-e não criam pendência. A lista `confirmacoes_pendentes` continua sendo a do
-banco.
-
-O modelo em uso é o mesmo `GEMINI_MODEL` das specs anteriores. Limites ativos
-continuam os do projeto da chave; esta entrega não presume quota. Se a cota
-estourar, a mensagem falha sem gravar trecho que o código não autorizou.
-Reiniciar a API com o mesmo diretório preserva sessões, pendências e eventos.
-A consulta não decide confirmação e não altera reserva nem visitante.
+e não criam pendência.
 
 ## Confirmação e recuperação
 
@@ -127,34 +167,13 @@ não cria eventos nem repete o efeito.
 
 O ADK 2.2.0 escolhe o agente antes da mensagem de retomada. Quando o último
 evento é do principal, `src/aurora/runtime/runner.py` devolve o especialista
-que pediu a confirmação, só nessa retomada. O mecanismo e o limite oficial do
-`DatabaseSessionService` estão em `docs/arquitetura.md`.
-
-Para repetir o roteiro sem mexer em `var/` já usado, suba com outro diretório:
-
-```bash
-AURORA_DATA_DIR=var/validacao-003 uv run aurora serve
-```
-
-Pare com Ctrl+C e suba de novo o mesmo comando, no mesmo diretório, sem
-restaurar. A pendência de visitante ou de reserva sobrevive, e a aprovação
-depois do reinício grava o efeito uma vez. Reenviar a mesma decisão responde
-`409`. Não existe comando de restauração nesta entrega. A spec 005 deve apagar
-as autorizações antes das propostas, invalidar sessões e pendências, reimportar
-os visitantes iniciais e preservar o ledger e o contador de códigos.
-
-## Limite observado nesta validação
-
-Em 2026-10-23, `uv run python scripts/check_model.py` respondeu
-`modelo=gemini-3.5-flash-lite` e `chamada_de_funcao=sim`, sem imprimir a chave.
-No mesmo dia, a API respondeu `429` com o limite do free tier: 15 requisições
-por minuto para `gemini-3.5-flash-lite`. TPM e RPD não vieram nessa resposta.
-Uma mensagem com transferência entre agentes gasta várias chamadas. Com esse
-teto, vale espaçar as mensagens ou ampliar a quota do projeto. O número não
-vale para outra chave. Se a cota estoura depois que a tool já gravou o efeito
-e o evento de retorno, a confirmação conclui com `200` e não repete a gravação.
+que pediu a confirmação, só nessa retomada. A limitação oficial do
+`DatabaseSessionService` continua um gate de execução: a evidência válida é o
+efeito nas rotas diretas, com a sessão persistida, inclusive depois de
+reiniciar. Resposta HTTP sem efeito não conta.
 
 ## Parar
 
-Interrompa o processo com Ctrl+C. Subir outra vez com o mesmo comando e o mesmo
-`AURORA_DATA_DIR` continua a mesma base.
+Interrompa o processo com Ctrl+C e aguarde o encerramento. Só então rode
+`restaurar`, se for o caso. Subir outra vez com o mesmo comando e o mesmo
+`AURORA_DATA_DIR`, sem `restaurar`, continua a mesma base.

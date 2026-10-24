@@ -3,8 +3,8 @@
 O morador fala com `aurora_principal`. O código, não o texto do modelo, decide
 identidade, cobrança, cancelamento, autorização de entrada, exclusividade e
 quais trechos do regulamento podem ser lidos. Esta nota cobre a base da spec
-001, as reservas da spec 002, a autorização de visitantes da spec 003 e a
-consulta seletiva da spec 004.
+001, as reservas da spec 002, a autorização de visitantes da spec 003, a
+consulta seletiva da spec 004 e a restauração da spec 005.
 
 ## Agentes
 
@@ -181,8 +181,31 @@ A carga inicial de `dados/` ocorre uma vez, enquanto não existe a marca
 `inicializado`. Visitantes do seed ficam com `proposta_id` nulo. Autorizações
 novas exigem proposta. Reiniciar não restaura negócio nem apaga sessões,
 visitas, decisões ou eventos. Um banco anterior ganha `proposta_id` e as
-restrições de nome e chave sem apagar as linhas já gravadas. A restauração
-explícita fica para a spec 005: remove autorizações antes das propostas, por
-causa da chave estrangeira, invalida sessões e pendências, reimporta os
-visitantes iniciais com `proposta_id` nulo e preserva ledger e contador. Subir
-a API não faz essa restauração.
+restrições de nome e chave sem apagar as linhas já gravadas. Subir a API não
+faz a restauração explícita.
+
+## Restauração
+
+`uv run aurora serve` adquire lock compartilhado em `operation.lock`, no
+diretório de dados, antes de o processo abrir banco. O descritor fica aberto
+até o Uvicorn encerrar. O arquivo de lock não é apagado.
+`uv run aurora restaurar` pede o mesmo caminho em lock exclusivo e não
+bloqueante. Se o serviço estiver ativo, o comando sai com erro antes de criar
+o marcador e antes de escrever.
+
+O marcador `reset-in-progress.json` é gravado e sincronizado no disco antes
+de qualquer alteração dos bancos. Enquanto ele existe, `serve` recusa
+iniciar, tanto na CLI quanto em `AuroraRuntime.start`, e essa recusa não abre
+o SQLite de negócio. A transação de negócio, em `src/aurora/storage/reset.py`,
+apaga nesta ordem, que é a das chaves estrangeiras do schema: visitantes,
+reservas, despachos, decisões, propostas e identidades. Cadastros de
+apartamento e área permanecem. Reservas e visitantes iniciais voltam de
+`dados/`, com `proposta_id` nulo. `ledger_codigo` e `sequencia_codigo` não são
+apagados; o contador só sobe.
+
+Não há commit distribuído com o banco do ADK. Depois do commit de negócio, as
+conexões de negócio são fechadas e `recriar_banco_vazio` remove o arquivo do
+ADK, o WAL e o SHM, e cria um banco vazio com o `DatabaseSessionService` da
+versão fixada. Sessões antigas deixam de existir. O marcador só sai depois
+que as duas bases foram conferidas. Falha no meio mantém o marcador; repetir
+`restaurar` com a API parada é idempotente. `serve` nunca chama essa rotina.

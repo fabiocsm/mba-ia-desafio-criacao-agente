@@ -35,6 +35,30 @@ def adk_database_url(path: Path) -> str:
     return "sqlite+aiosqlite:///" + path.resolve().as_posix()
 
 
+def recriar_banco_vazio(path: Path) -> None:
+    """Fecha o serviço local e recria o SQLite do ADK sem sessões nem eventos.
+
+    Remove também WAL, SHM e journal desse arquivo. O chamador precisa ter
+    soltado as outras conexões e impedir outro processo de reabri-lo.
+    """
+    destino = path.expanduser().resolve()
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    for sufixo in ("", "-wal", "-shm", "-journal"):
+        candidato = Path(str(destino) + sufixo) if sufixo else destino
+        if candidato.is_file():
+            candidato.unlink()
+    asyncio.run(_criar_banco_vazio(destino))
+
+
+async def _criar_banco_vazio(path: Path) -> None:
+    service = OrderedDatabaseSessionService(adk_database_url(path))
+    try:
+        tune_sqlite(service)
+        await service.prime_timestamps()
+    finally:
+        await service.close()
+
+
 def tune_sqlite(service: DatabaseSessionService) -> None:
     def _pragmas(dbapi_connection, _connection_record) -> None:
         cursor = dbapi_connection.cursor()

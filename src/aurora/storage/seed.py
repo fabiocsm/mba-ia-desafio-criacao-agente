@@ -1,7 +1,8 @@
 """Carga inicial transacional. Reiniciar não restaura dados já gravados.
 
 C07: carga inicial ocorre em uma transação somente no banco nunca
-inicializado; reiniciar não restaura dados.
+inicializado; reiniciar não restaura dados. A reposição explícita fica em
+aurora.storage.reset e não é chamada daqui.
 """
 
 from __future__ import annotations
@@ -61,13 +62,35 @@ def _ler(path: Path) -> list[dict]:
     return payload
 
 
-def _importar(connection: Connection, dados_dir: Path) -> None:
-    apartamentos = _ler(dados_dir / "apartamentos.json")
-    areas = _ler(dados_dir / "areas.json")
-    reservas = _ler(dados_dir / "reservas.json")
-    visitantes = _ler(dados_dir / "visitantes.json")
+def garantir_cadastros(connection: Connection, dados_dir: Path) -> None:
+    """Importa apartamentos e áreas só quando o banco ainda não tem cadastro."""
+    apartamentos = connection.execute(
+        text("SELECT COUNT(*) FROM apartamento")
+    ).scalar_one()
+    areas = connection.execute(text("SELECT COUNT(*) FROM area")).scalar_one()
+    if int(apartamentos) == 0 and int(areas) == 0:
+        _inserir_cadastros(connection, dados_dir)
+        return
+    if int(apartamentos) == 0 or int(areas) == 0:
+        raise RuntimeError("Cadastro inicial incompleto.")
 
-    for item in apartamentos:
+
+def inserir_operacionais_iniciais(connection: Connection, dados_dir: Path) -> None:
+    """Reinsere reservas e visitantes iniciais com proposta_id nulo.
+
+    O gatilho que exige proposta vale depois da marca de inicialização.
+    A reposição desliga esse gatilho só nesta transação e o recria em seguida.
+    """
+    from aurora.storage.schema import _garantir_gatilhos_visitante
+
+    connection.execute(text("DROP TRIGGER IF EXISTS visitante_nova_exige_proposta"))
+    _inserir_reservas(connection, dados_dir)
+    _inserir_visitantes(connection, dados_dir)
+    _garantir_gatilhos_visitante(connection)
+
+
+def _inserir_cadastros(connection: Connection, dados_dir: Path) -> None:
+    for item in _ler(dados_dir / "apartamentos.json"):
         connection.execute(
             text(
                 "INSERT INTO apartamento (numero, morador) VALUES "
@@ -75,7 +98,7 @@ def _importar(connection: Connection, dados_dir: Path) -> None:
             ),
             {"numero": item["numero"], "morador": item["morador"]},
         )
-    for item in areas:
+    for item in _ler(dados_dir / "areas.json"):
         connection.execute(
             text(
                 "INSERT INTO area (id, nome, taxa_centavos) VALUES "
@@ -87,7 +110,10 @@ def _importar(connection: Connection, dados_dir: Path) -> None:
                 "taxa_centavos": _centavos(item["taxa"]),
             },
         )
-    for item in reservas:
+
+
+def _inserir_reservas(connection: Connection, dados_dir: Path) -> None:
+    for item in _ler(dados_dir / "reservas.json"):
         connection.execute(
             text(
                 "INSERT INTO reserva (codigo, apartamento, area, data, cancelada) "
@@ -100,7 +126,10 @@ def _importar(connection: Connection, dados_dir: Path) -> None:
                 "data": _data_civil(item["data"]),
             },
         )
-    for item in visitantes:
+
+
+def _inserir_visitantes(connection: Connection, dados_dir: Path) -> None:
+    for item in _ler(dados_dir / "visitantes.json"):
         connection.execute(
             text(
                 "INSERT INTO visitante (apartamento, nome, data) VALUES "
@@ -113,6 +142,15 @@ def _importar(connection: Connection, dados_dir: Path) -> None:
             },
         )
 
+
+def _importar(connection: Connection, dados_dir: Path) -> None:
+    apartamentos = _ler(dados_dir / "apartamentos.json")
+    areas = _ler(dados_dir / "areas.json")
+    reservas = _ler(dados_dir / "reservas.json")
+    visitantes = _ler(dados_dir / "visitantes.json")
+    _inserir_cadastros(connection, dados_dir)
+    _inserir_reservas(connection, dados_dir)
+    _inserir_visitantes(connection, dados_dir)
     registrar_codigos_existentes(connection)
     conferencias = (
         ("SELECT COUNT(*) FROM apartamento", len(apartamentos)),

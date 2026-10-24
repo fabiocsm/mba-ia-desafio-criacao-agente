@@ -9,8 +9,8 @@ autorizar visitantes e responder dúvidas sobre o regulamento, expondo somente u
 Antes de especificar, planejar, implementar ou revisar, consultar:
 
 - [Constituição](.specify/memory/constitution.md): princípios, restrições e governança.
-- [README](README.md): enunciado, contrato, critérios de aceite e fluxo do avaliador;
-  na entrega final, será substituído pelo manual de execução.
+- [README](README.md): manual de execução, com Arquitetura, Garantias e Como rodar.
+- [Enunciado](docs/desafio-original.md): contrato, critérios de aceite e fluxo do avaliador.
 - [Índice das specs](specs/README.md): dependências, contrato consolidado, cobertura dos
   28 critérios de aceite e dos 15 passos do avaliador.
 - A spec da funcionalidade e seus artefatos de planejamento e tarefas, quando existentes.
