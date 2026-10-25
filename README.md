@@ -88,8 +88,8 @@ Sessões e eventos ficam em `adk.sqlite3`.
 `OrderedDatabaseSessionService.append_event` grava chamada, resultado e
 transferência sem filtrar o histórico (`src/aurora/runtime/sessions.py`).
 Subir a API chama `initialize_storage` só no banco ainda sem a marca
-`inicializado` e não chama `executar_restauracao` (`AuroraRuntime.start` e
-`_serve` em `src/aurora/cli.py`). `GET /sessoes/{session_id}/eventos` apenas lê.
+`inicializado` e não chama `executar_restauracao` (`AuroraRuntime.start` em
+`src/aurora/runtime/service.py` e `_serve` em `src/aurora/cli.py`). `GET /sessoes/{session_id}/eventos` apenas lê.
 
 Códigos novos saem de `emitir_codigo` (`src/aurora/storage/codigos.py`), que
 grava o ledger e avança `sequencia_codigo` na mesma transação. Cancelar não

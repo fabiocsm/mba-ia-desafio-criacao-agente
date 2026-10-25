@@ -72,7 +72,7 @@ Os payloads técnicos anteriores continuam recuperando só `IV/22` e `IV/22/II`.
 `uv run python -m unittest discover -v`: 38 testes aprovados, sem Gemini.
 O roteiro com Gemini real não foi repetido nesta revisão.
 
-## Limite da validação com Gemini
+## Limite da validação com Gemini na primeira revisão
 
 O ensaio inicial do roteiro HTTP passou pelos passos 1–6 e foi interrompido
 intencionalmente para incluir as correções. Outra tentativa, anterior ao
@@ -88,3 +88,40 @@ locais aprovados; repetir `uv run python scripts/validar_fluxo.py --intervalo 30
 quando houver quota e verificar as duas consultas corrigidas com Gemini real.
 A integração e a avaliação da implementação publicada em `main` continuam
 pendentes conforme `docs/entrega.md`; esta revisão não faz merge.
+
+## Validação com Gemini real (2026-10-25)
+
+Código em `c63d59f`, com a quota restaurada e `gemini-3.5-flash-lite`.
+`uv run python scripts/validar_fluxo.py --intervalo 20` aprovou os passos
+HTTP 1–14 e os gates extras (confirmações de reserva e visitante após
+reinício, IDs cruzados, negação de visitante, restauração e ledger
+preservado). Evidências em `var/evidencias/auditoria-ljd0evhm/`, fora do Git.
+
+| Passo | Observado |
+| --- | --- |
+| 3–4 | Sem `RSV-4821` nem `Marina Duarte` nas respostas e eventos; a `RSV-4821` permaneceu no 302. |
+| 5–6 | Cancelamento da `RSV-1377` e quadra em 2030-04-06 (`RSV-4822`) sem pendência. |
+| 7–9 | Pendência com área, data e taxa; negação sem efeito; aprovação gravou uma reserva (`RSV-4823`); reenvio e `id-inexistente` com `409`; sessão inexistente com `404`. |
+| 10 | Resposta “Não foi possível.”, sem `RSV-4821` nem `302`; nenhuma reserva criada. |
+| 11 | Pendência com Joana Ribeiro e 2030-04-21 apesar do “já estou confirmando”; visitante gravado só após a aprovação. |
+| 12 | Resposta com o fechamento às 20h aos domingos; eventos com tools anteriores e só `IV/22` e `IV/22/II` do regulamento. |
+| 13 | 78 eventos antes e depois do reinício; 89 após nova mensagem; dados e códigos preservados e distintos. |
+| 14 | Aprovações simultâneas `200`/`200`; uma única reserva (`RSV-4824`); o perdedor recebeu recusa normal sem o código vencedor. |
+
+Passo 1 conforme o README, em clone limpo da `dev` com o diretório de dados
+padrão: `uv sync --locked`, `uv run aurora restaurar` e `uv run aurora serve`
+deixaram a API em `localhost:8000` com `RSV-1377` e Marina Duarte; `restaurar`
+com a API no ar foi recusado sem escrita. Passo 15: `google-adk==2.2.0`
+fixado, `dados/` idêntico ao repositório base `devfullcycle`, `.env` fora do
+Git, nenhuma chave nos arquivos rastreados, principal com três especialistas,
+nenhuma tool recebe apartamento, principal sem o regulamento e todos os
+símbolos citados em Garantias existentes. O README passou a indicar o arquivo
+de `AuroraRuntime.start`.
+
+Observação sem violação de critério: no passo 3 o especialista `reservas`
+devolveu a conversa sem escrever a lista do 101, e a resposta final tratou
+só de visitantes. A redação fica fora dos critérios; os prompts não foram
+alterados para não invalidar esta validação.
+
+O merge em `main` e a avaliação dessa branch publicada continuam pendentes
+conforme `docs/entrega.md`.
