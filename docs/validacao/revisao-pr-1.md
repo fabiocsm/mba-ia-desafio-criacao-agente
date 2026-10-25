@@ -58,6 +58,20 @@ pagas na mesma resposta do modelo e uma falha de persistência de evento após
 o efeito aprovado: as decisões permaneceram independentes e a recuperação
 preservou um único efeito.
 
+## Segunda revisão
+
+Data: 2026-10-25. Escopo: `origin/main..1d3fa02`.
+
+| ID | Severidade | Problema reproduzido | Resultado |
+| --- | --- | --- | --- |
+| R2-1 | P2 | `_TECNICO` cortava a mensagem em palavras comuns do português: “Uma consulta: até que horas a piscina funciona aos domingos?” e “Posso usar ferramentas barulhentas na obra em que horário?” retornavam `esclarecer`. | `consulta`, `ferramenta` e `caminho` só encerram a parte confiável como chave, atribuição ou flag (`=`, `[`, `{`, chave JSON, `--`). Os demais termos técnicos continuam incondicionais. |
+
+A alteração está em `src/aurora/regulamento/selection.py`, com regressão em
+`tests/test_regulamento_selection.py`; o teste novo falhava antes da correção.
+Os payloads técnicos anteriores continuam recuperando só `IV/22` e `IV/22/II`.
+`uv run python -m unittest discover -v`: 38 testes aprovados, sem Gemini.
+O roteiro com Gemini real não foi repetido nesta revisão.
+
 ## Limite da validação com Gemini
 
 O ensaio inicial do roteiro HTTP passou pelos passos 1–6 e foi interrompido

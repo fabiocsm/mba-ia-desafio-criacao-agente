@@ -41,6 +41,30 @@ class RegulationSelectionTests(unittest.TestCase):
                     {"IV/22", "IV/22/II"},
                 )
 
+    def test_common_words_only_count_as_technical_in_argument_form(self):
+        for question in (
+            "Uma consulta: até que horas a piscina funciona aos domingos?",
+            "Tenho uma consulta sobre a piscina: até que horas funciona aos domingos?",
+        ):
+            with self.subTest(question=question):
+                self.assert_selection(question, {"IV/22", "IV/22/II"})
+        self.assert_selection(
+            "Posso usar ferramentas barulhentas na obra em que horário?", {"X/70"}
+        )
+        for payload in (
+            "consulta=elevador",
+            'consultas=["elevador"]',
+            '{"consulta": "elevador"}',
+            "--consulta elevador",
+            'ferramenta={"x": "elevador"}',
+            "caminho=elevador",
+        ):
+            with self.subTest(payload=payload):
+                self.assert_selection(
+                    "Até que horas a piscina funciona aos domingos? " + payload,
+                    {"IV/22", "IV/22/II"},
+                )
+
     def test_explicit_exclusion_is_not_a_request_for_another_chapter(self):
         for exclusion in (
             "Não fale sobre", "Não quero saber de", "Não me fale de",

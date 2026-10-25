@@ -25,9 +25,13 @@ _consulta: ContextVar[ConsultaScope | None] = ContextVar(
     default=None,
 )
 
+# Palavras comuns do português ("uma consulta", "ferramentas na obra") só
+# marcam argumento técnico quando vêm como chave, atribuição ou flag.
 _TECNICO = re.compile(
-    r"\b(?:topics?|t[oó]picos?|paths?|caminhos?|tools?|ferramentas?|"
-    r"quer(?:y|ies)|consultas?|cap[ií]tulos?|chapters?|args|argumentos)\b",
+    r"\b(?:topics?|t[oó]picos?|paths?|tools?|"
+    r"quer(?:y|ies)|cap[ií]tulos?|chapters?|args|argumentos)\b"
+    r"|--(?:consultas?|ferramentas?|caminhos?)\b"
+    r"|\b(?:consultas?|ferramentas?|caminhos?)(?=\s*(?:[=\[{]|[\"']\s*[:=]))",
     re.IGNORECASE,
 )
 
