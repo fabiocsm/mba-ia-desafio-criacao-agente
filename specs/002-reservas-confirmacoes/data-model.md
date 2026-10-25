@@ -1,0 +1,32 @@
+# Modelo de dados: reservas e decisões consumíveis
+
+Extensão do [modelo 001](../001-sessoes-isolamento/data-model.md), no banco de negócio existente. Não modificar cadastros, identidade canônica, eventos anteriores ou `dados/`. Constraints C201–C212 são literais para tasks.md. Campos não especificados não ganham limites arbitrários de tamanho.
+
+| Entidade | Campos/relações | Constraints literais |
+| --- | --- | --- |
+| Reserva | `codigo` TEXT PK FK ledger; `apartamento` FK; `area` FK; `data` TEXT; `cancelada` booleano; `cancelada_em` UTC nullable | C201: “codigo é obrigatório, único e gerado pelo sistema; apartamento e area são obrigatórios e referenciam cadastros; data usa AAAA-MM-DD e é uma data civil válida”. C202: “cancelada é booleano não nulo com default false; cancelar preserva a linha e o codigo; cancelada_em é nulo enquanto ativa e preenchido ao cancelar”. C203: “há no máximo uma reserva ativa por area e data, imposta por índice único parcial WHERE cancelada=0” |
+| Área e taxa | cadastro 001; `taxa_centavos` representação exata derivada do JSON | C204: “taxa é lida do cadastro, representada exatamente em centavos; taxa zero dispensa confirmação e taxa maior que zero exige confirmação”. Sem pagamento/estorno |
+| LedgerCodigo | `codigo` TEXT PK, `emitido_em`; inclui todos códigos iniciais e emitidos | C205: “codigo do ledger é obrigatório e único; códigos iniciais, cancelados e emitidos permanecem reservados, inclusive após reinício ou restauração” |
+| SequenciaCodigo | `chave` PK fixa reserva; `proximo` INTEGER | C206: “proximo é inteiro maior que os sufixos iniciais e avança atomicamente com a emissão; nenhum código emitido é reutilizado”. Gerar RSV-{numero}; registro e contador sobrevivem a reset de negócio |
+| PropostaConfirmacao | `id` UUID TEXT PK; `session_id` FK SessionIdentity; `acao` TEXT; `parametros_json`; `original_function_call_id`; `native_confirmation_id` nullable antes de correlação; `invocation_id`; `author`; `branch` nullable; `fase`; `created_at` | C207: “id, session_id, acao, parametros_json, original_function_call_id, invocation_id e author são obrigatórios e imutáveis; branch pode ser nulo”. C208: “acao pertence a reservar_area ou autorizar_visitante; fase pertence a preparando ou pendente; native_confirmation_id é obrigatório e único ao publicar pendente”. C209: “parametros_json contém area e data válidas para reservar_area, mais taxa_centavos congelada; autorizar_visitante conterá nome e data na spec 003; nenhum parâmetro congelado pode ser atualizado”. Unique `(session_id,invocation_id,original_function_call_id)` deduplica reentrada inicial |
+| DecisaoConfirmacao | `proposta_id` PK FK; `confirmado` booleano; `decidida_em` UTC; `consumida_em` nullable; `resultado_json` nullable | C210: “proposta_id é obrigatório e único; confirmado é booleano estrito e imutável gravado somente pela rota sistêmica; decidida_em é obrigatório; consumida_em e resultado_json são ambos nulos antes do consumo e ambos preenchidos após”. Resultado contém somente efeito próprio ou recusa genérica |
+| DespachoRetomada | `proposta_id` PK FK Decisao; `estado`; `ultima_falha` técnica sanitizada nullable | C211: “proposta_id é obrigatório e único; estado pertence a recuperar ou concluido; concluir exige resultado consumido e eventos de retomada persistidos”. Não gravar chave/prompt secreto em erro |
+| Projeção de disponibilidade | EXISTS da reserva ativa por área/data | C212: “disponibilidade expõe somente livre ou ocupada; consultas e cancelamentos próprios filtram apartamento antes de materializar dados” |
+
+A referência à identidade é a sessão canônica, não o state ADK. Não duplicar apartamento escolhido pelo modelo. Payload ADK é espelho JSON dos parâmetros; banco continua autoridade. Constraints de cadastro/identidade/eventos da 001 continuam obrigatórias.
+
+## Estados e transações
+
+1. Tool inicial: valida → prepara proposta → pede confirmação nativa. Evento ADK persistido → correlaciona ID novo → fase pendente. Se interrompido entre gravações, recuperação procura evento original antes de publicar; proposta preparando jamais constitui autorização ou reserva. Proposta sem evento recuperável não deve virar pendência respondível; registrar falha e permitir novo pedido sem efeito.
+2. Pendência pública = fase pendente **sem DecisaoConfirmacao**. Não guardar segundo booleano pendente que possa divergir. Listar todas pela sessão.
+3. Rota verifica sessão primeiro; INSERT de decisão sob transação/CAS somente se pendente da mesma sessão, junto ao despacho recuperar. Outra sessão/ausente/respondida →409, sem alterar qualquer proposta.
+4. Reentrada nativa autorizada: decisão não consumida → transação cria reserva paga, ou recusa por ocupação, ou negação sem efeito; grava resultado e consumida_em no mesmo commit. Corrigir qualquer falha de transação antes de confirmar sucesso. Não usar argumentos reexecutados para trocar a proposta congelada.
+5. Reentrada técnica com decisão consumida → devolve resultado persistido próprio; não aloca novo código nem refaz ação. HTTP respondido nunca é pendência novamente.
+6. Sem taxa: transação índice+ledger+contador+reserva, sem proposta. Cancelamento: UPDATE somente próprio, sem proposta. Falha não apaga códigos já emitidos com commit; rollback de emissão não publicada não gera reserva.
+7. Despacho recuperar → Runner nativo → eventos persistidos e resultado consumido → concluido. Reinício reconcilia somente metadados; não executa Runner, não cria eventos e não restaura negócio. GET é leitura pura. Despacho decidido incompleto só retoma numa nova POST de mensagens antes do novo texto; replay 409 não recupera. Depois de HTTP 200 nenhum despacho fica incompleto. Restauração explícita da 005 invalida sessões/pendências e preserva ledger/contador; detalhar comando lá.
+
+## Exclusividade e segurança de conteúdo
+
+Índice único parcial continua autoridade mesmo com dois pedidos simultâneos; uma decisão perdedora é consumida com indisponibilidade normal. Tratar violação específica desse índice, sem ler reserva vencedora. Nenhuma nova restrição de datas passadas, antecedência, horário ou capacidade. Datas válidas são calendário, não política de elegibilidade.
+
+Ledger, sequência e decisão/efeito pertencem ao mesmo banco/transação. ADK permanece banco/eventos próprio com recuperação, sem alegar atomicidade entre bancos. Histórico completo mantém calls/results/actions, com ordenação imutável herdada; nenhum filtro posterior esconde vazamentos.

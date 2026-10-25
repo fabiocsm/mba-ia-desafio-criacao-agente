@@ -1,3 +1,15 @@
 .env
 .venv/
+venv/
 __pycache__/
+*.pyc
+dist/
+*.egg-info/
+var/
+var/evidencias/
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
